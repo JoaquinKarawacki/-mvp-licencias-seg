@@ -1,0 +1,58 @@
+// Esquema de base de datos - Sistema de licencias SEG
+
+generator client {
+  provider = "prisma-client"
+  output   = "../generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+enum Rol {
+  EMPLEADO
+  ADMIN
+}
+
+enum EstadoSolicitud {
+  PENDIENTE
+  APROBADA
+  RECHAZADA
+  CANCELADA
+}
+
+model Usuario {
+  id               Int       @id @default(autoincrement())
+  email            String    @unique
+  hash_contrasena  String
+  rol              Rol       @default(EMPLEADO)
+  esta_activo      Boolean   @default(true)
+  fecha_creacion   DateTime  @default(now())
+  fecha_actualizacion DateTime @updatedAt
+
+  empleado         Empleado?
+}
+
+model Sector {
+  id             Int        @id @default(autoincrement())
+  nombre         String     @unique
+  fecha_creacion DateTime   @default(now())
+
+  empleados      Empleado[]
+}
+
+model Empleado {
+  id             Int      @id @default(autoincrement())
+  usuario_id     Int      @unique
+  nombre         String
+  apellido       String
+  fecha_ingreso  DateTime
+  es_encargado   Boolean  @default(false)
+  esta_activo    Boolean  @default(true)
+  sector_id      Int
+  fecha_creacion    DateTime @default(now())
+  fecha_actualizacion DateTime @updatedAt
+
+  usuario        Usuario  @relation(fields: [usuario_id], references: [id])
+  sector         Sector   @relation(fields: [sector_id], references: [id])
+}
