@@ -1,8 +1,9 @@
 // Esquema de base de datos - Sistema de licencias SEG
 
 generator client {
-  provider = "prisma-client"
-  output   = "../generated/prisma"
+  provider     = "prisma-client"
+  output       = "../generated/prisma"
+  moduleFormat = "cjs"
 }
 
 datasource db {
