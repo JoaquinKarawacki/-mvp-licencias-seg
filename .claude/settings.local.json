@@ -1,0 +1,8 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(rm \"c:\\\\Users\\\\usuario\\\\Documents\\\\Desarollos joaquin\\\\-mvp-licencias-seg\\\\src\\\\modulos\\\\dto\\\\login.dt.ts\")",
+      "Bash(rmdir \"c:\\\\Users\\\\usuario\\\\Documents\\\\Desarollos joaquin\\\\-mvp-licencias-seg\\\\src\\\\modulos\\\\dto\")"
+    ]
+  }
+}

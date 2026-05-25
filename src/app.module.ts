@@ -1,6 +1,7 @@
 import { Module } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
 import { PrismaModulo } from './prisma/prisma.modulo';
+import { AutenticacionModulo } from './modulos/autenticacion/autenticacion.modulo';
 
 @Module({
   imports: [
@@ -8,6 +9,7 @@ import { PrismaModulo } from './prisma/prisma.modulo';
       isGlobal: true,
     }),
     PrismaModulo,
+    AutenticacionModulo,
   ],
   controllers: [],
   providers: [],
