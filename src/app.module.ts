@@ -3,6 +3,7 @@ import { ConfigModule } from '@nestjs/config';
 import { PrismaModulo } from './prisma/prisma.modulo';
 import { AutenticacionModulo } from './modulos/autenticacion/autenticacion.modulo';
 import { SectoresModulo } from './modulos/sectores/sectores.modulo';
+import { EmpleadosModulo } from './modulos/empleados/empleado.modulo';  
 
 @Module({
   imports: [
@@ -11,7 +12,9 @@ import { SectoresModulo } from './modulos/sectores/sectores.modulo';
     }),
     PrismaModulo,
     AutenticacionModulo,
-    SectoresModulo, 
+    SectoresModulo,
+    EmpleadosModulo,
+
   ],
   controllers: [],
   providers: [],
