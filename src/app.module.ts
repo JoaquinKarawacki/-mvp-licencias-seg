@@ -4,6 +4,7 @@ import { PrismaModulo } from './prisma/prisma.modulo';
 import { AutenticacionModulo } from './modulos/autenticacion/autenticacion.modulo';
 import { SectoresModulo } from './modulos/sectores/sectores.modulo';
 import { EmpleadosModulo } from './modulos/empleados/empleado.modulo';  
+import { TipoLicenciaModulo } from './modulos/licencias/tipos/tipos-licencia.modulo';
 
 @Module({
   imports: [
@@ -14,7 +15,7 @@ import { EmpleadosModulo } from './modulos/empleados/empleado.modulo';
     AutenticacionModulo,
     SectoresModulo,
     EmpleadosModulo,
-
+    TipoLicenciaModulo,
   ],
   controllers: [],
   providers: [],
