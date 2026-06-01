@@ -3,7 +3,6 @@ import { PrismaServicio } from '../../../prisma/prisma.servicio';
 import { CrearTipoLicenciaDto } from './dto/crear-tipo-licencia.dto';
 import { ActualizarTipoLicenciaDto } from './dto/actualizar-tipo-licencia.dto';
 
-
 @Injectable()
 export class TipoLicenciaServicio {
   constructor(private readonly prisma: PrismaServicio) {}

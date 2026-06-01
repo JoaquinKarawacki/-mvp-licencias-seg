@@ -5,6 +5,7 @@ import { AutenticacionModulo } from './modulos/autenticacion/autenticacion.modul
 import { SectoresModulo } from './modulos/sectores/sectores.modulo';
 import { EmpleadosModulo } from './modulos/empleados/empleado.modulo';  
 import { TipoLicenciaModulo } from './modulos/licencias/tipos/tipos-licencia.modulo';
+import { FeriadoModulo } from './modulos/feriados/feriado.modulo';
 
 @Module({
   imports: [
@@ -16,6 +17,7 @@ import { TipoLicenciaModulo } from './modulos/licencias/tipos/tipos-licencia.mod
     SectoresModulo,
     EmpleadosModulo,
     TipoLicenciaModulo,
+    FeriadoModulo,
   ],
   controllers: [],
   providers: [],
