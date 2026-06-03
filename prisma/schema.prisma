@@ -57,6 +57,9 @@ model Empleado {
 
   usuario        Usuario  @relation(fields: [usuario_id], references: [id])
   sector         Sector   @relation(fields: [sector_id], references: [id])
+
+  solicitudes  SolicitudLicencia[] @relation("solicitudes")
+  revisiones   SolicitudLicencia[] @relation("revisiones")
 }
 
 model TipoLicencia {
@@ -66,6 +69,8 @@ model TipoLicencia {
   requiere_saldo Boolean @default(true)
   descripcion    String?
   esta_activo    Boolean @default(true)
+
+  solicitudes  SolicitudLicencia[]
 }
 
 model Feriado {
@@ -73,4 +78,29 @@ model Feriado {
   fecha         DateTime @unique
   nombre        String
   es_recurrente Boolean  @default(false)
+}
+
+model SolicitudLicencia {
+  id               Int       @id @default(autoincrement())
+  empleado_id      Int
+  tipo_licencia_id Int
+  dias_descontados Int
+  estado           EstadoSolicitud @default(PENDIENTE)
+  comentario       String?
+  revisado_por     Int?
+  motivo_rechazo   String?
+  fecha_creacion   DateTime  @default(now())
+
+  empleado      Empleado      @relation("solicitudes", fields: [empleado_id], references: [id])
+  revisor       Empleado?     @relation("revisiones", fields: [revisado_por], references: [id])
+  tipo_licencia TipoLicencia  @relation(fields: [tipo_licencia_id], references: [id])
+  dias          DiaSolicitado[]
+}
+
+model DiaSolicitado {
+  id           Int      @id @default(autoincrement())
+  solicitud_id Int
+  fecha        DateTime
+
+  solicitud    SolicitudLicencia @relation(fields: [solicitud_id], references: [id], onDelete: Cascade)
 }
