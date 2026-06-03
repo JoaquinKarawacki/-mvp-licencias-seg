@@ -27,7 +27,7 @@ export class CalculadorServicio {
         let semanaActual: Date[] = [];
 
         for (const dia of dias) {
-            if(dia.getDay()==1 && semanaActual.length>0){
+            if(dia.getUTCDay()==1 && semanaActual.length>0){
                 semanas.push(semanaActual);
                 semanaActual = [];
             }
