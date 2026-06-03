@@ -54,6 +54,7 @@ model Empleado {
   sector_id      Int
   fecha_creacion    DateTime @default(now())
   fecha_actualizacion DateTime @updatedAt
+  saldos SaldoLicencia[]
 
   usuario        Usuario  @relation(fields: [usuario_id], references: [id])
   sector         Sector   @relation(fields: [sector_id], references: [id])
@@ -69,6 +70,7 @@ model TipoLicencia {
   requiere_saldo Boolean @default(true)
   descripcion    String?
   esta_activo    Boolean @default(true)
+  saldos SaldoLicencia[]
 
   solicitudes  SolicitudLicencia[]
 }
@@ -103,4 +105,19 @@ model DiaSolicitado {
   fecha        DateTime
 
   solicitud    SolicitudLicencia @relation(fields: [solicitud_id], references: [id], onDelete: Cascade)
+}
+
+model SaldoLicencia {
+  id              Int      @id @default(autoincrement())
+  empleado_id     Int
+  tipo_licencia_id Int
+  anio            Int
+  total_dias      Float
+  dias_usados     Float    @default(0)
+  dias_ajustados  Float    @default(0)
+
+  empleado      Empleado     @relation(fields: [empleado_id], references: [id])
+  tipo_licencia TipoLicencia @relation(fields: [tipo_licencia_id], references: [id])
+
+  @@unique([empleado_id, tipo_licencia_id, anio])
 }

@@ -7,6 +7,7 @@ import { EmpleadosModulo } from './modulos/empleados/empleado.modulo';
 import { TipoLicenciaModulo } from './modulos/licencias/tipos/tipos-licencia.modulo';
 import { FeriadoModulo } from './modulos/feriados/feriado.modulo';
 import { SolicitudModulo } from './modulos/licencias/solicitud/solicitud.modulo';
+import { SaldoModulo } from './modulos/licencias/saldos/saldos.modulo';
 
 @Module({
   imports: [
@@ -20,6 +21,7 @@ import { SolicitudModulo } from './modulos/licencias/solicitud/solicitud.modulo'
     TipoLicenciaModulo,
     FeriadoModulo,
     SolicitudModulo,
+    SaldoModulo,
   ],
   controllers: [],
   providers: [],

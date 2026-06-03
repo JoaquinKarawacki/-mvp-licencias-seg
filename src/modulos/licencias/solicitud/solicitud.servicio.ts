@@ -2,13 +2,14 @@ import { Injectable, NotFoundException, ConflictException, ForbiddenException } 
 import { PrismaServicio } from '../../../prisma/prisma.servicio';
 import { CalculadorServicio } from '../calculador/calculador.servicio';
 import { CrearSolicitudLicenciaDto } from './dto/crear-solicitud.dto';
-
+import { SaldosServicio } from '../saldos/saldos.servicio';
 
 @Injectable()
 export class SolicitudesServicio {
   constructor(
     private readonly prisma: PrismaServicio,
     private readonly calculador: CalculadorServicio,
+    private readonly saldos: SaldosServicio,
   ) {}
 
     async crear(usuarioId: number, crearSolicitudLicenciaDto: CrearSolicitudLicenciaDto) {
@@ -142,13 +143,22 @@ export class SolicitudesServicio {
         if(solicitud.empleado.sector_id !== encargado.sector_id){
             throw new ForbiddenException('El empleado debe pertenecer al mismo sector que el encargado')
         }
-        
-    return this.prisma.solicitudLicencia.update({
-            where: { id: solicitudId },
-            data: {
-                estado: 'APROBADA',
-                revisado_por: encargado.id,
-            },
+
+        // determinar el año del saldo (usamos el año de la fecha de creación)
+        const anio = solicitud.fecha_creacion.getFullYear();
+
+        // descontar del saldo del empleado
+        await this.saldos.descontarSaldo(
+        solicitud.empleado_id,
+        solicitud.tipo_licencia_id,
+        anio,
+        solicitud.dias_descontados,
+        );
+
+        // marcar como aprobada
+        return this.prisma.solicitudLicencia.update({
+        where: { id: solicitudId },
+        data: { estado: 'APROBADA', revisado_por: encargado.id },
         });
     }
 
