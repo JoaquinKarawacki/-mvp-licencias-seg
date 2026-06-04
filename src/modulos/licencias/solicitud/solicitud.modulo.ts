@@ -3,9 +3,11 @@ import { SolicitudesServicio } from './solicitud.servicio';
 import { SolicitudesControlador } from './solicitud.controlador';
 import { CalculadorServicio } from '../calculador/calculador.servicio';
 import { SaldosServicio } from '../saldos/saldos.servicio';
+import { NotificacionesModulo } from '../../notificaciones/notificaciones.modulo';
 
 @Module({
+  imports: [NotificacionesModulo],
   controllers: [SolicitudesControlador],
-  providers: [SolicitudesServicio, CalculadorServicio,SaldosServicio],
+  providers: [SolicitudesServicio, CalculadorServicio, SaldosServicio],
 })
 export class SolicitudModulo {} 

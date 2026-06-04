@@ -121,3 +121,13 @@ model SaldoLicencia {
 
   @@unique([empleado_id, tipo_licencia_id, anio])
 }
+
+model Notificacion {
+  id              Int      @id @default(autoincrement())
+  destinatario    String
+  asunto          String
+  tipo            String
+  enviado         Boolean  @default(false)
+  error           String?
+  fecha_creacion  DateTime @default(now())
+}

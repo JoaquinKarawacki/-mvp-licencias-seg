@@ -3,6 +3,7 @@ import { PrismaServicio } from '../../../prisma/prisma.servicio';
 import { CalculadorServicio } from '../calculador/calculador.servicio';
 import { CrearSolicitudLicenciaDto } from './dto/crear-solicitud.dto';
 import { SaldosServicio } from '../saldos/saldos.servicio';
+import { NotificacionesServicio } from '../../notificaciones/notificaciones.servicio';
 
 @Injectable()
 export class SolicitudesServicio {
@@ -10,6 +11,7 @@ export class SolicitudesServicio {
     private readonly prisma: PrismaServicio,
     private readonly calculador: CalculadorServicio,
     private readonly saldos: SaldosServicio,
+    private readonly notificaciones: NotificacionesServicio,
   ) {}
 
     async crear(usuarioId: number, crearSolicitudLicenciaDto: CrearSolicitudLicenciaDto) {
@@ -55,24 +57,42 @@ export class SolicitudesServicio {
             feriados.map((f) => f.fecha),
         );
 
-        // 6. Crear la solicitud + sus días en una sola operación
+         // 6. Crear la solicitud + sus días en una sola operación
         const solicitud = await this.prisma.solicitudLicencia.create({
             data: {
-            empleado_id: empleado.id,
-            tipo_licencia_id: crearSolicitudLicenciaDto.tipo_licencia_id,
-            dias_descontados: diasDescontados,
-            comentario: crearSolicitudLicenciaDto.comentario,
-            estado: 'PENDIENTE',
-            dias: {
-                create: fechasPedidas.map((fecha) => ({ fecha })),
-            },
+                empleado_id: empleado.id,
+                tipo_licencia_id: crearSolicitudLicenciaDto.tipo_licencia_id,
+                dias_descontados: diasDescontados,
+                comentario: crearSolicitudLicenciaDto.comentario,
+                estado: 'PENDIENTE',
+                dias: {
+                    create: fechasPedidas.map((fecha) => ({ fecha })),
+                },
             },
             include: {
-            dias: true,
+                dias: true,
             },
         });
 
-    return solicitud;
+        const encargado = await this.prisma.empleado.findFirst({
+            where: {
+                sector_id: empleado.sector_id,
+                es_encargado: true,
+                esta_activo: true,
+            },
+            include: { usuario: true },
+            });
+
+        // Notificar (si hay encargado con email)
+        if (encargado) {
+        await this.notificaciones.notificarNuevaSolicitud(
+            encargado.usuario.email,
+            `${empleado.nombre} ${empleado.apellido}`,
+            diasDescontados,
+            );
+        }
+
+        return solicitud;
     }
 
     async verMias(usuarioId: number) {
@@ -131,7 +151,10 @@ export class SolicitudesServicio {
         // 2. Buscar la solicitud (con su empleado, para saber el sector)
         const solicitud = await this.prisma.solicitudLicencia.findUnique({
             where: { id: solicitudId },
-            include: { empleado: true },
+            include: {
+                empleado: { include: { usuario: true } },
+                dias: true,
+            },
         });
 
         if(!solicitud){
@@ -155,11 +178,24 @@ export class SolicitudesServicio {
         solicitud.dias_descontados,
         );
 
-        // marcar como aprobada
-        return this.prisma.solicitudLicencia.update({
-        where: { id: solicitudId },
-        data: { estado: 'APROBADA', revisado_por: encargado.id },
+       const aprobada = await this.prisma.solicitudLicencia.update({
+            where: { id: solicitudId },
+            data: { estado: 'APROBADA', revisado_por: encargado.id },
         });
+
+        // Calcular el rango de fechas (primer y último día pedido)
+        const fechas = solicitud.dias.map((d) => d.fecha).sort((a, b) => a.getTime() - b.getTime());
+        const desde = fechas[0].toISOString().split('T')[0];
+        const hasta = fechas[fechas.length - 1].toISOString().split('T')[0];
+
+        await this.notificaciones.notificarAprobacion(
+            solicitud.empleado.usuario.email,
+            `${solicitud.empleado.nombre} ${solicitud.empleado.apellido}`,
+            desde,
+            hasta,
+        );
+
+        return aprobada;
     }
 
     async rechazar(usuarioId: number, solicitudId: number, motivo: string) {
@@ -179,7 +215,7 @@ export class SolicitudesServicio {
         // 2. Buscar la solicitud (con su empleado, para saber el sector)
         const solicitud = await this.prisma.solicitudLicencia.findUnique({
             where: { id: solicitudId },
-            include: { empleado: true },
+            include: { empleado: { include: { usuario: true } } },
         });
 
         if(!solicitud){
@@ -192,14 +228,18 @@ export class SolicitudesServicio {
             throw new ForbiddenException('El empleado debe pertenecer al mismo sector que el encargado')
         }
         
-        return this.prisma.solicitudLicencia.update({
+        const rechazada = await this.prisma.solicitudLicencia.update({
             where: { id: solicitudId },
-            data: {
-                estado: 'RECHAZADA',
-                motivo_rechazo: motivo,
-                revisado_por: encargado.id,
-            },
+            data: { estado: 'RECHAZADA', revisado_por: encargado.id },
         });
+
+        await this.notificaciones.notificarRechazo(
+            solicitud.empleado.usuario.email,
+            `${solicitud.empleado.nombre} ${solicitud.empleado.apellido}`,
+            motivo,
+        );
+
+        return rechazada;
     }
 
     async cancelar(usuarioId: number, solicitudId: number){
