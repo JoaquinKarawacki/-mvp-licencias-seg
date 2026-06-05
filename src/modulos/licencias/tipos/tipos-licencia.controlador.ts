@@ -8,7 +8,6 @@ import { Roles } from '../../../comun/decoradores/roles.decorador';
 
 @Controller('tipos-licencia')
 @UseGuards(JwtGuardia, RolesGuardia)
-@Roles('ADMIN')
 export class TipoLicenciaControlador {
   constructor(private readonly tipoLicenciaServicio: TipoLicenciaServicio) {}
 
@@ -23,11 +22,15 @@ export class TipoLicenciaControlador {
   }
 
   @Post()
+  @Roles('ADMIN')                       
+  @UseGuards(RolesGuardia)
   async crear(@Body() crearTipoLicenciaDto: CrearTipoLicenciaDto) {
     return this.tipoLicenciaServicio.crear(crearTipoLicenciaDto);
   }
 
   @Patch(':id')
+  @Roles('ADMIN')                         // 👈 y acá
+  @UseGuards(RolesGuardia)
   async actualizar(@Param('id') id: string, @Body() actualizarTipoLicenciaDto: ActualizarTipoLicenciaDto) {
     return this.tipoLicenciaServicio.actualizar(+id, actualizarTipoLicenciaDto);
   }
