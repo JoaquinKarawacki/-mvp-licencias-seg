@@ -31,4 +31,12 @@ export class CrearEmpleadoDto {
   @IsOptional()
   @IsBoolean({ message: 'El campo encargado debe ser verdadero o falso' })
   es_encargado?: boolean;
+
+  @IsOptional()
+  @IsBoolean({ message: 'El campo estudiante debe ser verdadero o falso' })
+  es_estudiante?: boolean;
+
+  @IsOptional()
+  @IsInt({ message: 'Las horas semanales deben ser un número' })
+  horas_semanales?: number;
 }

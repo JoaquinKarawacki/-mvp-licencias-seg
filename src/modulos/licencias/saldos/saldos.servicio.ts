@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { ConflictException, Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaServicio } from '../../../prisma/prisma.servicio';
 
 @Injectable()
@@ -49,10 +49,20 @@ export class SaldosServicio {
 
   const diasExtra = this.calcularDiasExtra(antiguedad);
 
-  return diasBase + diasExtra;  
+  return Math.ceil(diasBase + diasExtra);  
  }
 
- async generarSaldo(empleadoId: number, tipoLicenciaId: number, anio: number) {
+ private calcularDiasEstudio(horasSemanales: number): number {
+  if (horasSemanales <= 36) {
+    return 6;
+  }
+  if (horasSemanales < 48) {
+    return 9;
+  }
+  return 12;
+}
+
+async generarSaldo(empleadoId: number, tipoLicenciaId: number, anio: number) {
   const empleado = await this.prisma.empleado.findUnique({
     where: { id: empleadoId },
   });
@@ -60,7 +70,28 @@ export class SaldosServicio {
     throw new NotFoundException('El empleado no existe');
   }
 
-  const totalDias = this.calcularDiasCorrespondientes(empleado.fecha_ingreso, anio);
+  // Buscamos el tipo de licencia para conocer su código
+  const tipoLicencia = await this.prisma.tipoLicencia.findUnique({
+    where: { id: tipoLicenciaId },
+  });
+  if (!tipoLicencia) {
+    throw new NotFoundException('El tipo de licencia no existe');
+  }
+
+  let totalDias: number;
+
+  if (tipoLicencia.codigo === 'ESTUDIO') {
+    // Solo los estudiantes tienen saldo de estudio
+    if (!empleado.es_estudiante) {
+      throw new ConflictException(
+        'No se puede generar saldo de estudio para un empleado que no es estudiante',
+      );
+    }
+    totalDias = this.calcularDiasEstudio(empleado.horas_semanales);
+  } else {
+    // NORMAL: lógica por antigüedad de siempre
+    totalDias = this.calcularDiasCorrespondientes(empleado.fecha_ingreso, anio);
+  }
 
   return this.prisma.saldoLicencia.upsert({
     where: {

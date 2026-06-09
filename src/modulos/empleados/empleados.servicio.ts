@@ -1,15 +1,16 @@
-import { Injectable, ConflictException, NotFoundException } from '@nestjs/common';
+import { Injectable, ConflictException, NotFoundException, UnauthorizedException} from '@nestjs/common';
 import * as bcrypt from 'bcryptjs';
 import { PrismaServicio } from '../../prisma/prisma.servicio';
 import { CrearEmpleadoDto } from './dto/crear-empleado.dto';
 import { ActualizarEmpleadoDto } from './dto/actualizar-empleado.dto';
+import { CambiarContraseniaDto } from './dto/cambiar-contrasenia.dto';
 
 @Injectable()
 export class EmpleadosServicio {
   constructor(private readonly prisma: PrismaServicio) {}
 
   async crear(crearEmpleadoDto: CrearEmpleadoDto) {
-    const { email, contrasena, nombre, apellido, fecha_ingreso, sector_id, es_encargado } = crearEmpleadoDto;
+    const { email, contrasena, nombre, apellido, fecha_ingreso, sector_id, es_encargado, es_estudiante, horas_semanales } = crearEmpleadoDto;
 
     const emailUtilizado = await this.prisma.usuario.findUnique({
       where: { email },
@@ -46,6 +47,8 @@ export class EmpleadosServicio {
           es_encargado: es_encargado ?? false,
           sector_id,
           usuario_id: usuario.id,
+          es_estudiante: es_estudiante ?? false,
+          horas_semanales: horas_semanales ?? 0,
         },
       });
 
@@ -170,4 +173,29 @@ export class EmpleadosServicio {
   });
   });
   }
+  
+  async cambiarContrasenia(usuarioId:number, dto: CambiarContraseniaDto) {
+    const empleado = await this.prisma.empleado.findUnique({
+      where: { usuario_id: usuarioId },
+      include: { usuario: true },
+    });
+    if (!empleado) {
+      throw new NotFoundException('Empleado no encontrado');
+    }
+    const { contrasena_actual, contrasena_nueva } = dto;
+    const passwordMatch = await bcrypt.compare(contrasena_actual, empleado.usuario.hash_contrasena);
+    if (!passwordMatch) {
+      throw new UnauthorizedException('La contraseña actual es incorrecta');
+    }
+    const hashContrasena = await bcrypt.hash(contrasena_nueva, 10);
+    
+    await this.prisma.usuario.update({
+        where: { id: empleado.usuario_id },
+        data: { hash_contrasena: hashContrasena },
+      });
+
+    return { mensaje: 'Contraseña actualizada correctamente' };
+
+  }
+  
 }

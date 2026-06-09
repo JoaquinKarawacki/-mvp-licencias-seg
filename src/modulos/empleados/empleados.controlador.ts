@@ -2,6 +2,7 @@ import { Controller, Get, Post, Patch, Body, Param, UseGuards } from '@nestjs/co
 import { EmpleadosServicio } from './empleados.servicio';
 import { CrearEmpleadoDto } from './dto/crear-empleado.dto';
 import { ActualizarEmpleadoDto } from './dto/actualizar-empleado.dto';
+import { CambiarContraseniaDto } from './dto/cambiar-contrasenia.dto';
 import { JwtGuardia } from '../../comun/guardias/jwt.guardia';
 import { RolesGuardia } from '../../comun/guardias/roles.guardias';
 import { Roles } from '../../comun/decoradores/roles.decorador';
@@ -37,6 +38,15 @@ export class EmpleadosControlador {
   async crear(@Body() empleado: CrearEmpleadoDto) {
     return this.empleadosServicio.crear(empleado);
   }
+
+  @Patch('cambiar-contrasenia')
+  async cambiarContrasenia(
+  @UsuarioActual() usuario: { id: number },
+  @Body() dto: CambiarContraseniaDto,
+  ) {
+    return this.empleadosServicio.cambiarContrasenia(usuario.id, dto);
+  }
+
   
   @Patch(':id')
   @Roles('ADMIN')

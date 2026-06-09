@@ -29,7 +29,10 @@ export class FeriadoControlador {
     }
 
     @Patch(':id')
-    async actualizar(@Param('id') @Body() id:string, actualizarFeriadoDto: ActualizarFeriadoDto){
-        return this.feriadoServicio.actualizar(+id, actualizarFeriadoDto)
+    async actualizar(
+    @Param('id') id: string,
+    @Body() actualizarFeriadoDto: ActualizarFeriadoDto,
+    ) {
+        return this.feriadoServicio.actualizar(+id, actualizarFeriadoDto);
     }
 }
