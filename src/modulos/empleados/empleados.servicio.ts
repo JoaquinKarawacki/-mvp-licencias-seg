@@ -138,7 +138,7 @@ export class EmpleadosServicio {
       }
     }
 
-    return this.prisma.$transaction(async (tx) => {
+  return this.prisma.$transaction(async (tx) => {
   const { email, contrasena, ...datosEmpleado } = actualizarEmpleadoDto;
 
   if (email) {
@@ -156,10 +156,18 @@ export class EmpleadosServicio {
     });
   }
 
-    return tx.empleado.update({
-      where: { id },
-      data: datosEmpleado,
-    });
-    });
+  // Armamos el objeto a guardar, convirtiendo la fecha si vino
+  const datosAGuardar = {
+    ...datosEmpleado,
+    ...(datosEmpleado.fecha_ingreso && {
+      fecha_ingreso: new Date(datosEmpleado.fecha_ingreso),
+    }),
+  };
+
+  return tx.empleado.update({
+    where: { id },
+    data: datosAGuardar,
+  });
+  });
   }
 }
