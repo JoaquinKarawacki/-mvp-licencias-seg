@@ -196,5 +196,24 @@ async generarSaldo(empleadoId: number, tipoLicenciaId: number, anio: number) {
   });
 }
 
+async verSaldoEmpleado(empleadoId: number, anio: number) {
+  const empleado = await this.prisma.empleado.findUnique({
+    where: { id: empleadoId },
+  });
+  if (!empleado) {
+    throw new NotFoundException('El empleado no existe');
+  }
+
+  const saldos = await this.prisma.saldoLicencia.findMany({
+    where: { empleado_id: empleadoId, anio },
+    include: { tipo_licencia: true },
+  });
+
+  return saldos.map((saldo) => ({
+    ...saldo,
+    disponible: saldo.total_dias + saldo.dias_ajustados - saldo.dias_usados,
+  }));
+}
+
 
 }

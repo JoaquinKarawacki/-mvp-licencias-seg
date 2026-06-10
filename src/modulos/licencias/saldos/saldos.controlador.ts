@@ -1,4 +1,4 @@
-import { Controller, Get, Post, Patch, Body, Query, UseGuards } from '@nestjs/common';
+import { Controller, Get, Post, Patch, Body, Query, Param, UseGuards } from '@nestjs/common';
 import { SaldosServicio } from './saldos.servicio';
 import { GenerarSaldoDto } from './dto/generar-saldo.dto';
 import { AjustarSaldoDto } from './dto/ajustar-saldo.dto';
@@ -18,6 +18,16 @@ export class SaldosControlador {
     @Query('anio') anio: string,
   ) {
     return this.saldosServicio.verMiSaldo(usuario.id, +anio);
+  }
+
+  @Get('empleado/:id')
+  @Roles('ADMIN')
+  @UseGuards(RolesGuardia)
+  async verSaldoEmpleado(
+    @Param('id') id: string,
+    @Query('anio') anio: string,
+  ) {
+  return this.saldosServicio.verSaldoEmpleado(+id, +anio);
   }
 
   @Post('generar')
