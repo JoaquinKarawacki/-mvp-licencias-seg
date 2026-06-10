@@ -7,7 +7,9 @@ async function iniciar() {
 
   app.setGlobalPrefix('api');
 
-  app.enableCors({ origin: 'http://localhost:3001' })
+  app.enableCors({
+  origin: process.env.FRONTEND_URL ?? 'http://localhost:3001',
+  });
 
   app.useGlobalPipes(
     new ValidationPipe({
