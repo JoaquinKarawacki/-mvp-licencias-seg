@@ -142,7 +142,7 @@ export class EmpleadosServicio {
     }
 
   return this.prisma.$transaction(async (tx) => {
-  const { email, contrasena, esta_activo, ...datosEmpleado } = actualizarEmpleadoDto;
+  const { email, contrasena, esta_activo, fecha_ingreso, ...datosEmpleado } = actualizarEmpleadoDto;
 
   if (email) {
     await tx.usuario.update({
@@ -160,24 +160,19 @@ export class EmpleadosServicio {
   }
 
   if (esta_activo !== undefined) {
-  await tx.usuario.update({
-    where: { id: empleadoExistente.usuario_id },
-    data: { esta_activo },
-  });
-}
-
-  // Armamos el objeto a guardar, convirtiendo la fecha si vino
- const datosAGuardar = {
-    ...datosEmpleado,
-    ...(datosEmpleado.fecha_ingreso && {
-      fecha_ingreso: new Date(datosEmpleado.fecha_ingreso),
-    }),
-    ...(esta_activo !== undefined && { esta_activo }),  // ← mismo nivel
-  };
+    await tx.usuario.update({
+      where: { id: empleadoExistente.usuario_id },
+      data: { esta_activo },
+    });
+  }
 
   return tx.empleado.update({
     where: { id },
-    data: datosAGuardar,
+    data: {
+      ...datosEmpleado,
+      ...(fecha_ingreso && { fecha_ingreso: new Date(fecha_ingreso) }),
+      ...(esta_activo !== undefined && { esta_activo }),
+    },
   });
   });
   }
