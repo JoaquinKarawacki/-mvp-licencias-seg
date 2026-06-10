@@ -3,6 +3,7 @@ import { ClientSecretCredential } from '@azure/identity';
 import { Client } from '@microsoft/microsoft-graph-client';
 import { TokenCredentialAuthenticationProvider } from '@microsoft/microsoft-graph-client/authProviders/azureTokenCredentials';
 import { PrismaServicio } from '../../prisma/prisma.servicio';
+import { Cron } from '@nestjs/schedule';
 import 'isomorphic-fetch';
 
 @Injectable()
@@ -30,6 +31,104 @@ export class NotificacionesServicio {
     this.remitente = process.env.MAIL_FROM!;
     this.ccFijo = [process.env.MAIL_CC_1!, process.env.MAIL_CC_2!];
   }
+
+  private async calcularProximoDiaHabil(): Promise<Date> {
+  const feriados = await this.prisma.feriado.findMany();
+
+  const candidato = new Date();
+  candidato.setUTCHours(0, 0, 0, 0);
+  candidato.setUTCDate(candidato.getUTCDate() + 1); // empezar desde mañana
+
+  while (true) {
+    const diaSemana = candidato.getUTCDay(); // 0=domingo, 6=sábado
+
+    if (diaSemana === 0 || diaSemana === 6) {
+      candidato.setUTCDate(candidato.getUTCDate() + 1);
+      continue;
+    }
+
+    const esFeriado = feriados.some((f) => {
+      if (f.es_recurrente) {
+        // feriado recurrente: solo importa mes y día, no el año
+        return (
+          f.fecha.getUTCMonth() === candidato.getUTCMonth() &&
+          f.fecha.getUTCDate() === candidato.getUTCDate()
+        );
+      }
+      // feriado fijo: fecha exacta
+      return (
+        f.fecha.toISOString().split('T')[0] ===
+        candidato.toISOString().split('T')[0]
+      );
+    });
+
+    if (esFeriado) {
+      candidato.setUTCDate(candidato.getUTCDate() + 1);
+      continue;
+    }
+
+    return candidato;
+    }
+  }
+
+  async notificarVispera(): Promise<void> {
+  const proximoDiaHabil = await this.calcularProximoDiaHabil();
+
+  // rango del día para comparar con el DateTime de Postgres
+  const inicioDia = new Date(proximoDiaHabil);
+  inicioDia.setUTCHours(0, 0, 0, 0);
+  const finDia = new Date(proximoDiaHabil);
+  finDia.setUTCHours(23, 59, 59, 999);
+
+  // solicitudes aprobadas que tienen algún día en ese rango
+  const solicitudes = await this.prisma.solicitudLicencia.findMany({
+    where: {
+      estado: 'APROBADA',
+      dias: {
+        some: { fecha: { gte: inicioDia, lte: finDia } },
+      },
+    },
+    include: {
+      empleado: true,
+      dias: { orderBy: { fecha: 'asc' } },
+    },
+  });
+
+  // filtrar solo las que EMPIEZAN ese día (no las que solo pasan por ese día)
+  const solicitudesQueEmpiezan = solicitudes.filter((s) => {
+    if (s.dias.length === 0) return false;
+    const primerDia = s.dias[0].fecha;
+    return primerDia >= inicioDia && primerDia <= finDia;
+  });
+
+  for (const solicitud of solicitudesQueEmpiezan) {
+    const nombre = `${solicitud.empleado.nombre} ${solicitud.empleado.apellido}`;
+    const diasStr = solicitud.dias
+      .map((d) => {
+        const [anio, mes, dia] = d.fecha.toISOString().split('T')[0].split('-');
+        return `${dia}/${mes}/${anio}`;
+      })
+      .join(', ');
+
+    await this.enviarCorreo(
+      process.env.MAIL_TODOS!,
+      `Aviso de licencia mañana - ${nombre}`,
+      `<p>Se informa que <strong>${nombre}</strong> comenzará su licencia mañana.</p>
+       <p>Días: ${diasStr}</p>`,
+      'AVISO_VISPERA',
+      );
+    }
+  }
+
+@Cron('0 8 * * 1-5', { timeZone: 'America/Montevideo' })
+async ejecutarAvisoVispera(): Promise<void> {
+  this.logger.log('Ejecutando aviso de víspera...');
+  try {
+    await this.notificarVispera();
+  } catch (error) {
+    this.logger.error('Error en aviso de víspera', error);
+  }
+}
 
   private async enviarCorreo(
   destinatario: string,

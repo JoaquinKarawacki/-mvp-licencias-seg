@@ -1,5 +1,6 @@
 import { Module } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
+import { ScheduleModule } from '@nestjs/schedule';
 import { PrismaModulo } from './prisma/prisma.modulo';
 import { AutenticacionModulo } from './modulos/autenticacion/autenticacion.modulo';
 import { SectoresModulo } from './modulos/sectores/sectores.modulo';
@@ -15,6 +16,7 @@ import { NotificacionesModulo } from './modulos/notificaciones/notificaciones.mo
     ConfigModule.forRoot({
       isGlobal: true,
     }),
+    ScheduleModule.forRoot(),
     PrismaModulo,
     AutenticacionModulo,
     SectoresModulo,

@@ -33,24 +33,34 @@ export class SaldosServicio {
 
  private calcularDiasCorrespondientes(fechaIngreso: Date, anio: number): number {
   const antiguedad = this.calcularAntiguedad(fechaIngreso, anio);
-
-  let diasBase: number;
-
-  if (antiguedad >= 1) {
-    diasBase = 20;
-  } else {
-    // proporcional: entró durante "anio" (o el anterior sin cumplir el año)
-    // meses trabajados en el año × 1.66
-    // pista: si entró en "anio", los meses son (12 - mes de ingreso)
-    //        getMonth() da 0-11, entonces meses = 12 - fechaIngreso.getMonth()
-    const mesesTrabajados = 12 - fechaIngreso.getMonth();
-    diasBase = mesesTrabajados * 1.66;
-  }
-
   const diasExtra = this.calcularDiasExtra(antiguedad);
 
-  return Math.ceil(diasBase + diasExtra);  
- }
+  if (antiguedad >= 1) {
+    // Año completo: 20 días fijos + extras por antigüedad (sin decimales posibles)
+    return 20 + diasExtra;
+  }
+
+  // --- Proporcional: el empleado tiene menos de un año ---
+
+  // OJO: usar getUTC* para evitar el corrimiento por UTC-3
+  const mesIngreso = fechaIngreso.getUTCMonth(); // 0 = enero, 11 = diciembre
+  const diaIngreso = fechaIngreso.getUTCDate();  // 1-31
+
+  // ¿El mes de ingreso cuenta? Solo si trabajó ≥18 días (base 30, no días reales)
+  // Ej: entró el 13 → 30 - 13 + 1 = 18 ✅  |  entró el 14 → 17 ❌
+  const diasEnMesIngreso = 30 - diaIngreso + 1;
+  const mesIngresoContado = diasEnMesIngreso >= 18 ? 1 : 0;
+
+  // Meses completos posteriores al de ingreso hasta diciembre (siempre cuentan)
+  // Ej: ingresó en marzo (mes 2) → abril a diciembre = 12 - 2 - 1 = 9 meses
+  const mesesPosteriores = 12 - mesIngreso - 1;
+
+  const totalMeses = mesIngresoContado + mesesPosteriores;
+  const diasAcumulados = totalMeses * (20 / 12);
+
+  // Regla RRHH: si acumulaste algo (> 0), mínimo 1 día tomable
+  return diasAcumulados > 0 ? Math.max(1, Math.floor(diasAcumulados)) : 0;
+}
 
  private calcularDiasEstudio(horasSemanales: number): number {
   if (horasSemanales <= 36) {

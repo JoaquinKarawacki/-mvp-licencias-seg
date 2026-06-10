@@ -50,8 +50,8 @@ model Empleado {
   apellido       String
   fecha_ingreso  DateTime
   es_encargado   Boolean  @default(false)
-  es_estudiante  Boolean  @default(false)      // 👈 AGREGAR
-  horas_semanales Int     @default(0)          // 👈 AGREGAR
+  es_estudiante  Boolean  @default(false)      
+  horas_semanales Int     @default(0)          
   esta_activo    Boolean  @default(true)
   sector_id      Int
   fecha_creacion    DateTime @default(now())
