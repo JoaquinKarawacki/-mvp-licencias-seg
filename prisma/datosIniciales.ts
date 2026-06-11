@@ -12,7 +12,7 @@ const pool = new Pool({ connectionString: process.env.DATABASE_URL });
 const adapter = new PrismaPg(pool);
 const prisma = new PrismaClient({ adapter } as any);
 
-const CONTRASENA_INICIAL = 'Licencias2026';
+const CONTRASENA_INICIAL = 'Licencias2026'; 
 const ANIO = 2026;
 
 // ─── SECTORES ────────────────────────────────────────────────────────────────
