@@ -277,5 +277,41 @@ export class SolicitudesServicio {
     
     }
 
+    async verSemana(desde: string, hasta: string) {
+        // Construimos el rango. Sumamos la hora para cubrir todo el día "hasta".
+        const fechaDesde = new Date(desde + 'T00:00:00.000Z');
+        const fechaHasta = new Date(hasta + 'T23:59:59.999Z');
+
+        const solicitudes = await this.prisma.solicitudLicencia.findMany({
+            where: {
+            estado: 'APROBADA',
+            dias: {
+                some: {
+                fecha: { gte: fechaDesde, lte: fechaHasta },
+                },
+            },
+            },
+            include: {
+            tipo_licencia: true,
+            empleado: { include: { sector: true } },
+            dias: true,
+            },
+        });
+
+        // Por cada solicitud dejamos SOLO los días que caen dentro de la semana pedida,
+        // y devolvemos una forma liviana para el front.
+        return solicitudes.map((solicitud) => ({
+            solicitud_id: solicitud.id,
+            empleado_id: solicitud.empleado_id,
+            nombre: solicitud.empleado.nombre,
+            apellido: solicitud.empleado.apellido,
+            sector: solicitud.empleado.sector?.nombre ?? null,
+            tipo_licencia: solicitud.tipo_licencia.nombre,
+            dias: solicitud.dias
+            .filter((d) => d.fecha >= fechaDesde && d.fecha <= fechaHasta)
+            .map((d) => d.fecha.toISOString().split('T')[0])
+            .sort(),
+        }));
+    }
 
 }

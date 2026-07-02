@@ -1,9 +1,12 @@
-import { Controller, Get, Post, Patch, Body, Param, UseGuards } from '@nestjs/common';
+import { Controller, Get, Post, Query, Patch, Body, Param, UseGuards } from '@nestjs/common';
 import { SolicitudesServicio } from './solicitud.servicio';
 import { CrearSolicitudLicenciaDto } from './dto/crear-solicitud.dto';
 import { RechazarSolicitudDto } from './dto/rechazar-solicitud.dto';
 import { JwtGuardia } from '../../../comun/guardias/jwt.guardia';
 import { UsuarioActual } from '../../../comun/decoradores/usuario-actual.decorador';
+
+import { RolesGuardia } from '../../../comun/guardias/roles.guardias';
+import { Roles } from '../../../comun/decoradores/roles.decorador';
 
 @Controller('solicitudes')
 @UseGuards(JwtGuardia)
@@ -51,5 +54,15 @@ export class SolicitudesControlador {
     @UsuarioActual() usuario: { id: number },
   ) {
     return this.solicitudesServicio.cancelar(usuario.id, +id);
+  }
+
+  @Get('semana')
+  @Roles('ADMIN')
+  @UseGuards(RolesGuardia)
+  async verSemana(
+    @Query('desde') desde: string,
+    @Query('hasta') hasta: string,
+  ) {
+    return this.solicitudesServicio.verSemana(desde, hasta);
   }
 }
