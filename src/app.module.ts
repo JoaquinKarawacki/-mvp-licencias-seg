@@ -10,6 +10,7 @@ import { FeriadoModulo } from './modulos/feriados/feriado.modulo';
 import { SolicitudModulo } from './modulos/licencias/solicitud/solicitud.modulo';
 import { SaldoModulo } from './modulos/licencias/saldos/saldos.modulo';
 import { NotificacionesModulo } from './modulos/notificaciones/notificaciones.modulo';
+import { AuditoriaModulo } from './modulos/auditoria/auditoria.modulo';
 
 @Module({
   imports: [
@@ -26,6 +27,7 @@ import { NotificacionesModulo } from './modulos/notificaciones/notificaciones.mo
     SolicitudModulo,
     SaldoModulo,
     NotificacionesModulo,
+    AuditoriaModulo
   ],
   controllers: [],
   providers: [],

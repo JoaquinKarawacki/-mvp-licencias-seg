@@ -133,3 +133,14 @@ model Notificacion {
   error           String?
   fecha_creacion  DateTime @default(now())
 }
+
+model AuditLog {
+  id             Int      @id @default(autoincrement())
+  usuario_id     Int?
+  usuario_email  String
+  accion         String
+  descripcion    String
+  entidad        String?
+  entidad_id     Int?
+  fecha_creacion DateTime @default(now())
+}
