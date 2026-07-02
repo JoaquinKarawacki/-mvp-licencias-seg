@@ -52,4 +52,10 @@ export class SaldosControlador {
       dto.dias,
     );
   }
+  @Get('todos')
+  @Roles('ADMIN')
+  @UseGuards(RolesGuardia)
+  async verTodosLosSaldos(@Query('anio') anio: string) {
+    return this.saldosServicio.verTodosLosSaldos(+anio);
+  }
 }

@@ -215,5 +215,31 @@ async verSaldoEmpleado(empleadoId: number, anio: number) {
   }));
 }
 
+async verTodosLosSaldos(anio: number) {
+  const empleados = await this.prisma.empleado.findMany({
+    include: {
+      sector: true,
+      saldos: {
+        where: { anio },
+        include: { tipo_licencia: true },
+      },
+    },
+    orderBy: [
+      { apellido: 'asc' },
+      { nombre: 'asc' },
+    ],
+  });
+
+  return empleados.map((empleado) => ({
+    id: empleado.id,
+    nombre: empleado.nombre,
+    apellido: empleado.apellido,
+    sector: empleado.sector,
+    saldos: empleado.saldos.map((saldo) => ({
+      ...saldo,
+      disponible: saldo.total_dias + saldo.dias_ajustados - saldo.dias_usados,
+    })),
+  }));
+}
 
 }
