@@ -28,4 +28,5 @@ export class JwtEstrategia extends PassportStrategy(Strategy) {
       rol: usuario.rol,
     };
   }
+  
 }

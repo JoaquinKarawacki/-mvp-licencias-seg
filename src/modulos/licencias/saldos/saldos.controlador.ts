@@ -27,35 +27,46 @@ export class SaldosControlador {
     @Param('id') id: string,
     @Query('anio') anio: string,
   ) {
-  return this.saldosServicio.verSaldoEmpleado(+id, +anio);
+    return this.saldosServicio.verSaldoEmpleado(+id, +anio);
+  }
+
+  @Get('todos')
+  @Roles('ADMIN')
+  @UseGuards(RolesGuardia)
+  async verTodosLosSaldos(@Query('anio') anio: string) {
+    return this.saldosServicio.verTodosLosSaldos(+anio);
   }
 
   @Post('generar')
   @Roles('ADMIN')
   @UseGuards(RolesGuardia)
-  async generar(@Body() dto: GenerarSaldoDto) {
+  async generar(
+    @UsuarioActual() usuario: { id: number; email: string },
+    @Body() dto: GenerarSaldoDto,
+  ) {
     return this.saldosServicio.generarSaldo(
       dto.empleado_id,
       dto.tipo_licencia_id,
       dto.anio,
+      usuario.id,
+      usuario.email,
     );
   }
 
   @Patch('ajustar')
   @Roles('ADMIN')
   @UseGuards(RolesGuardia)
-  async ajustar(@Body() dto: AjustarSaldoDto) {
+  async ajustar(
+    @UsuarioActual() usuario: { id: number; email: string },
+    @Body() dto: AjustarSaldoDto,
+  ) {
     return this.saldosServicio.ajustarSaldo(
       dto.empleado_id,
       dto.tipo_licencia_id,
       dto.anio,
       dto.dias,
+      usuario.id,
+      usuario.email,
     );
-  }
-  @Get('todos')
-  @Roles('ADMIN')
-  @UseGuards(RolesGuardia)
-  async verTodosLosSaldos(@Query('anio') anio: string) {
-    return this.saldosServicio.verTodosLosSaldos(+anio);
   }
 }

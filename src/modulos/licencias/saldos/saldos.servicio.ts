@@ -1,9 +1,13 @@
 import { ConflictException, Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaServicio } from '../../../prisma/prisma.servicio';
+import { AuditoriaServicio } from '../../auditoria/auditoria.servicio';
 
 @Injectable()
 export class SaldosServicio {
-  constructor(private readonly prisma: PrismaServicio) {}
+   constructor(
+    private readonly prisma: PrismaServicio,
+    private readonly auditoria: AuditoriaServicio,
+  ) {}
 
 
 
@@ -72,7 +76,13 @@ export class SaldosServicio {
   return 12;
 }
 
-async generarSaldo(empleadoId: number, tipoLicenciaId: number, anio: number) {
+async generarSaldo(
+  empleadoId: number,
+  tipoLicenciaId: number,
+  anio: number,
+  usuarioId?: number,
+  usuarioEmail?: string,
+) {
   const empleado = await this.prisma.empleado.findUnique({
     where: { id: empleadoId },
   });
@@ -80,7 +90,6 @@ async generarSaldo(empleadoId: number, tipoLicenciaId: number, anio: number) {
     throw new NotFoundException('El empleado no existe');
   }
 
-  // Buscamos el tipo de licencia para conocer su código
   const tipoLicencia = await this.prisma.tipoLicencia.findUnique({
     where: { id: tipoLicenciaId },
   });
@@ -91,7 +100,6 @@ async generarSaldo(empleadoId: number, tipoLicenciaId: number, anio: number) {
   let totalDias: number;
 
   if (tipoLicencia.codigo === 'ESTUDIO') {
-    // Solo los estudiantes tienen saldo de estudio
     if (!empleado.es_estudiante) {
       throw new ConflictException(
         'No se puede generar saldo de estudio para un empleado que no es estudiante',
@@ -99,11 +107,10 @@ async generarSaldo(empleadoId: number, tipoLicenciaId: number, anio: number) {
     }
     totalDias = this.calcularDiasEstudio(empleado.horas_semanales);
   } else {
-    // NORMAL: lógica por antigüedad de siempre
     totalDias = this.calcularDiasCorrespondientes(empleado.fecha_ingreso, anio);
   }
 
-  return this.prisma.saldoLicencia.upsert({
+  const saldo = await this.prisma.saldoLicencia.upsert({
     where: {
       empleado_id_tipo_licencia_id_anio: {
         empleado_id: empleadoId,
@@ -119,6 +126,20 @@ async generarSaldo(empleadoId: number, tipoLicenciaId: number, anio: number) {
       total_dias: totalDias,
     },
   });
+
+  // Solo auditamos si vino un usuario (o sea, lo llamó un admin, no descontarSaldo)
+  if (usuarioEmail) {
+    await this.auditoria.registrar({
+      usuario_id: usuarioId ?? null,
+      usuario_email: usuarioEmail,
+      accion: 'SALDO_GENERADO',
+      descripcion: `Generó saldo de ${tipoLicencia.nombre} para ${empleado.nombre} ${empleado.apellido} (${anio}): ${totalDias} días`,
+      entidad: 'SALDO',
+      entidad_id: saldo.id,
+    });
+  }
+
+  return saldo;
 }
 
  async verMiSaldo(usuarioId: number, anio: number) {
@@ -145,6 +166,8 @@ async generarSaldo(empleadoId: number, tipoLicenciaId: number, anio: number) {
   tipoLicenciaId: number,
   anio: number,
   dias: number,
+  usuarioId: number,
+  usuarioEmail: string,
 ) {
   const saldo = await this.prisma.saldoLicencia.findUnique({
     where: {
@@ -154,17 +177,29 @@ async generarSaldo(empleadoId: number, tipoLicenciaId: number, anio: number) {
         anio,
       },
     },
+    include: { empleado: true, tipo_licencia: true },
   });
   if (!saldo) {
     throw new NotFoundException('No existe un saldo para ese empleado, tipo y año');
   }
 
-  return this.prisma.saldoLicencia.update({
+  const actualizado = await this.prisma.saldoLicencia.update({
     where: { id: saldo.id },
     data: {
       dias_ajustados: saldo.dias_ajustados + dias,
     },
   });
+
+  await this.auditoria.registrar({
+    usuario_id: usuarioId,
+    usuario_email: usuarioEmail,
+    accion: 'SALDO_AJUSTADO',
+    descripcion: `Ajustó el saldo de ${saldo.tipo_licencia.nombre} de ${saldo.empleado.nombre} ${saldo.empleado.apellido} (${anio}) en ${dias >= 0 ? '+' : ''}${dias} días`,
+    entidad: 'SALDO',
+    entidad_id: saldo.id,
+  });
+
+  return actualizado;
 }
  
  async descontarSaldo(
