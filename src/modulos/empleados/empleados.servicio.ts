@@ -18,7 +18,7 @@ export class EmpleadosServicio {
     usuarioId: number,
     usuarioEmail: string,
   ) {
-    const { email, contrasena, nombre, apellido, fecha_ingreso, sector_id, es_encargado, es_estudiante, horas_semanales } = crearEmpleadoDto;
+    const { email, contrasena, nombre, apellido, fecha_ingreso, sector_id, es_encargado, es_estudiante, horas_semanales, aplica_regla_sabado } = crearEmpleadoDto;
 
     const emailUtilizado = await this.prisma.usuario.findUnique({
       where: { email },
@@ -57,6 +57,7 @@ export class EmpleadosServicio {
           usuario_id: usuario.id,
           es_estudiante: es_estudiante ?? false,
           horas_semanales: horas_semanales ?? 0,
+          aplica_regla_sabado: aplica_regla_sabado ?? true,
         },
       });
 

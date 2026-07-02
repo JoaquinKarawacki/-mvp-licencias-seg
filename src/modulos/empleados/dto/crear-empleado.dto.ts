@@ -37,6 +37,10 @@ export class CrearEmpleadoDto {
   es_estudiante?: boolean;
 
   @IsOptional()
+  @IsBoolean({ message: 'El campo aplica regla sabado debe ser verdadero o falso' })
+  aplica_regla_sabado?: boolean;
+
+  @IsOptional()
   @IsInt({ message: 'Las horas semanales deben ser un número' })
   horas_semanales?: number;
 }
