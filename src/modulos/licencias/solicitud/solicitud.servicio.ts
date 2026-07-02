@@ -21,6 +21,7 @@ export class SolicitudesServicio {
         // 1. Buscar el empleado a partir del usuario del token
         const empleado = await this.prisma.empleado.findUnique({
             where: { usuario_id: usuarioId },
+            include: { usuario: true },
         });
         if (!empleado) {
             throw new NotFoundException('El empleado no existe');
@@ -85,14 +86,22 @@ export class SolicitudesServicio {
             include: { usuario: true },
             });
 
-        // Notificar (si hay encargado con email)
         if (encargado) {
-        await this.notificaciones.notificarNuevaSolicitud(
-            encargado.usuario.email,
-            `${empleado.nombre} ${empleado.apellido}`,
-            diasDescontados,
+            await this.notificaciones.notificarNuevaSolicitud(
+                encargado.usuario.email,
+                `${empleado.nombre} ${empleado.apellido}`,
+                diasDescontados,
             );
         }
+
+        await this.auditoria.registrar({
+            usuario_id: empleado.usuario.id,
+            usuario_email: empleado.usuario.email,
+            accion: 'SOLICITUD_CREADA',
+            descripcion: `Pidió licencia (${tipoLicencia.nombre}), ${diasDescontados} días`,
+            entidad: 'SOLICITUD',
+            entidad_id: solicitud.id,
+        });
 
         return solicitud;
     }
@@ -215,6 +224,7 @@ export class SolicitudesServicio {
         
         const encargado = await this.prisma.empleado.findUnique({
             where: { usuario_id: usuarioId },
+            include: { usuario: true },
         });
 
         if (!encargado) {
@@ -252,6 +262,15 @@ export class SolicitudesServicio {
             motivo,
         );
 
+        await this.auditoria.registrar({
+            usuario_id: encargado.usuario.id,
+            usuario_email: encargado.usuario.email,
+            accion: 'SOLICITUD_RECHAZADA',
+            descripcion: `Rechazó la solicitud #${solicitud.id} de ${solicitud.empleado.nombre} ${solicitud.empleado.apellido}. Motivo: ${motivo}`,
+            entidad: 'SOLICITUD',
+            entidad_id: solicitud.id,
+        });
+
         return rechazada;
     }
 
@@ -259,6 +278,7 @@ export class SolicitudesServicio {
 
         const empleado = await this.prisma.empleado.findUnique({
             where: { usuario_id: usuarioId },
+            include: { usuario: true },
         });
 
         if (!empleado) {
@@ -278,16 +298,27 @@ export class SolicitudesServicio {
             throw new ForbiddenException('No podés cancelar una solicitud que no es tuya')
         }
 
-        if (solicitud.estado !== 'PENDIENTE'){
+       if (solicitud.estado !== 'PENDIENTE'){
             throw new ConflictException('El estado de la solictu debe estar en pendiente para ser aprobada')
         }
-         return this.prisma.solicitudLicencia.update({
+
+        const cancelada = await this.prisma.solicitudLicencia.update({
             where: { id: solicitudId },
             data: {
                 estado: 'CANCELADA',
             },
         });
-    
+
+        await this.auditoria.registrar({
+            usuario_id: empleado.usuario.id,
+            usuario_email: empleado.usuario.email,
+            accion: 'SOLICITUD_CANCELADA',
+            descripcion: `Canceló su solicitud #${solicitud.id}`,
+            entidad: 'SOLICITUD',
+            entidad_id: solicitud.id,
+        });
+
+        return cancelada; 
     }
 
     async verSemana(desde: string, hasta: string) {
