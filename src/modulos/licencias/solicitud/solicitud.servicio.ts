@@ -4,6 +4,7 @@ import { CalculadorServicio } from '../calculador/calculador.servicio';
 import { CrearSolicitudLicenciaDto } from './dto/crear-solicitud.dto';
 import { SaldosServicio } from '../saldos/saldos.servicio';
 import { NotificacionesServicio } from '../../notificaciones/notificaciones.servicio';
+import { AuditoriaServicio } from '../../auditoria/auditoria.servicio';
 
 @Injectable()
 export class SolicitudesServicio {
@@ -12,6 +13,7 @@ export class SolicitudesServicio {
     private readonly calculador: CalculadorServicio,
     private readonly saldos: SaldosServicio,
     private readonly notificaciones: NotificacionesServicio,
+    private readonly auditoria: AuditoriaServicio,
   ) {}
 
     async crear(usuarioId: number, crearSolicitudLicenciaDto: CrearSolicitudLicenciaDto) {
@@ -140,6 +142,7 @@ export class SolicitudesServicio {
         // 1. Buscar el encargado
         const encargado = await this.prisma.empleado.findUnique({
             where: { usuario_id: usuarioId },
+            include: { usuario: true },
         });
         if (!encargado) {
             throw new NotFoundException('El empleado no existe');
@@ -181,6 +184,7 @@ export class SolicitudesServicio {
        const aprobada = await this.prisma.solicitudLicencia.update({
             where: { id: solicitudId },
             data: { estado: 'APROBADA', revisado_por: encargado.id },
+            
         });
 
         // Calcular el rango de fechas (primer y último día pedido)
@@ -194,6 +198,15 @@ export class SolicitudesServicio {
             desde,
             hasta,
         );
+
+        await this.auditoria.registrar({
+            usuario_id: encargado.usuario.id,
+            usuario_email: encargado.usuario.email,
+            accion: 'SOLICITUD_APROBADA',
+            descripcion: `Aprobó la solicitud #${solicitud.id} de ${solicitud.empleado.nombre} ${solicitud.empleado.apellido} (${solicitud.dias_descontados} días)`,
+            entidad: 'SOLICITUD',
+            entidad_id: solicitud.id,
+        });
 
         return aprobada;
     }
