@@ -41,7 +41,7 @@ export class CalculadorServicio {
         return semanas;
     }
 
-    calcularDias(fechas: string[], feriados: Date[]): number {
+     calcularDias(fechas: string[], feriados: Date[], aplicaReglaSabado: boolean = true): number {
         const dias = fechas.map((f) => new Date(f));
 
         const diasValidos = dias.filter((dia) => !this.esFeriado(dia, feriados));
@@ -51,10 +51,10 @@ export class CalculadorServicio {
         let total = 0;
 
         for (const semana of semanas) {
-            if (semana.length > 2) {
-            total += semana.length + 1;
+            if (semana.length > 2 && aplicaReglaSabado) {
+                total += semana.length + 1;
             } else {
-            total += semana.length;
+                total += semana.length;
             }
         }
 

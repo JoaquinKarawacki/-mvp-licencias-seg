@@ -58,6 +58,7 @@ export class SolicitudesServicio {
         const diasDescontados = this.calculador.calcularDias(
             crearSolicitudLicenciaDto.dias,
             feriados.map((f) => f.fecha),
+            empleado.aplica_regla_sabado,
         );
 
          // 6. Crear la solicitud + sus días en una sola operación
