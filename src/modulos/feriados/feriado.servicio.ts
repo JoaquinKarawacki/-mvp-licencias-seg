@@ -73,4 +73,16 @@ export class FeriadoServicio{
         }
         return feriado;
     }
+    
+    async eliminar(id: number) {
+        const feriadoExistente = await this.prisma.feriado.findUnique({
+            where: { id },
+        });
+        if (!feriadoExistente) {
+            throw new NotFoundException('El feriado no existe');
+        }
+        return this.prisma.feriado.delete({
+            where: { id },
+        });
+    }
 }

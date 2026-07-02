@@ -1,4 +1,4 @@
-import { Controller, Get, Post, Patch, Body, Param, UseGuards } from '@nestjs/common';
+import { Controller, Get, Post, Patch, Body, Param, UseGuards, Delete } from '@nestjs/common';
 import { CrearTipoLicenciaDto } from './dto/crear-tipo-licencia.dto';
 import { ActualizarTipoLicenciaDto } from './dto/actualizar-tipo-licencia.dto';
 import { TipoLicenciaServicio } from './tipos-licencia.servicio';
@@ -33,5 +33,12 @@ export class TipoLicenciaControlador {
   @UseGuards(RolesGuardia)
   async actualizar(@Param('id') id: string, @Body() actualizarTipoLicenciaDto: ActualizarTipoLicenciaDto) {
     return this.tipoLicenciaServicio.actualizar(+id, actualizarTipoLicenciaDto);
+  }
+
+  @Delete(':id')
+  @Roles('ADMIN')
+  @UseGuards(RolesGuardia)
+  async eliminar(@Param('id') id: string) {
+      return this.tipoLicenciaServicio.eliminar(+id);
   }
 }

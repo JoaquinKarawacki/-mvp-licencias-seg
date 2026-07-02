@@ -1,4 +1,4 @@
-import { Controller, Get, Post, Patch, Body, Param, UseGuards } from '@nestjs/common';
+import { Controller, Get, Post, Patch, Body, Param, UseGuards, Delete } from '@nestjs/common';
 import { CrearFeriadoDto } from './dto/crear-feriado.dto';
 import { ActualizarFeriadoDto } from './dto/actualizar-feriado.dto';
 import { FeriadoServicio } from './feriado.servicio';
@@ -34,5 +34,10 @@ export class FeriadoControlador {
     @Body() actualizarFeriadoDto: ActualizarFeriadoDto,
     ) {
         return this.feriadoServicio.actualizar(+id, actualizarFeriadoDto);
+    }
+
+    @Delete(':id')
+    async eliminar(@Param('id') id: string) {
+        return this.feriadoServicio.eliminar(+id);
     }
 }

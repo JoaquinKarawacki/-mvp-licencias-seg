@@ -65,7 +65,25 @@ export class TipoLicenciaServicio {
 
         return tipoLicencia;
     }
-
+    
+    async eliminar(id: number) {
+    const tipoLicencia = await this.prisma.tipoLicencia.findUnique({
+        where: { id },
+    });
+    if (!tipoLicencia) {
+        throw new NotFoundException('El tipo de licencia no existe');
+    }
+    try {
+        return await this.prisma.tipoLicencia.delete({
+            where: { id },
+        });
+    } catch (error: any) {
+        if (error.code === 'P2003') {
+            throw new ConflictException('No se puede eliminar: tiene saldos o solicitudes asociadas');
+        }
+        throw error;
+    }
+}
 
 }
 
