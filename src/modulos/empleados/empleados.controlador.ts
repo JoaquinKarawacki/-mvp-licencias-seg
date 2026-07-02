@@ -35,8 +35,11 @@ export class EmpleadosControlador {
   @Post()
   @Roles('ADMIN')
   @UseGuards(RolesGuardia)
-  async crear(@Body() empleado: CrearEmpleadoDto) {
-    return this.empleadosServicio.crear(empleado);
+  async crear(
+    @UsuarioActual() usuario: { id: number; email: string },
+    @Body() empleado: CrearEmpleadoDto,
+  ) {
+    return this.empleadosServicio.crear(empleado, usuario.id, usuario.email);
   }
 
   @Patch('cambiar-contrasenia')
@@ -51,8 +54,12 @@ export class EmpleadosControlador {
   @Patch(':id')
   @Roles('ADMIN')
   @UseGuards(RolesGuardia)
-  async actualizar(@Param('id') id: string, @Body() empleado: ActualizarEmpleadoDto) {
-    return this.empleadosServicio.actualizar(+id, empleado);
-  } 
+  async actualizar(
+    @Param('id') id: string,
+    @UsuarioActual() usuario: { id: number; email: string },
+    @Body() empleado: ActualizarEmpleadoDto,
+  ) {
+    return this.empleadosServicio.actualizar(+id, empleado, usuario.id, usuario.email);
+  }
 
 }

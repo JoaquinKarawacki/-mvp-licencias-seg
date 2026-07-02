@@ -1,15 +1,23 @@
-import { Injectable, ConflictException, NotFoundException, UnauthorizedException} from '@nestjs/common';
+﻿import { Injectable, ConflictException, NotFoundException, UnauthorizedException} from '@nestjs/common';
 import * as bcrypt from 'bcryptjs';
 import { PrismaServicio } from '../../prisma/prisma.servicio';
 import { CrearEmpleadoDto } from './dto/crear-empleado.dto';
 import { ActualizarEmpleadoDto } from './dto/actualizar-empleado.dto';
 import { CambiarContraseniaDto } from './dto/cambiar-contrasenia.dto';
+import { AuditoriaServicio } from '../auditoria/auditoria.servicio';
 
 @Injectable()
 export class EmpleadosServicio {
-  constructor(private readonly prisma: PrismaServicio) {}
+  constructor(
+    private readonly prisma: PrismaServicio,
+    private readonly auditoria: AuditoriaServicio,
+  ) {}
 
-  async crear(crearEmpleadoDto: CrearEmpleadoDto) {
+  async crear(
+    crearEmpleadoDto: CrearEmpleadoDto,
+    usuarioId: number,
+    usuarioEmail: string,
+  ) {
     const { email, contrasena, nombre, apellido, fecha_ingreso, sector_id, es_encargado, es_estudiante, horas_semanales } = crearEmpleadoDto;
 
     const emailUtilizado = await this.prisma.usuario.findUnique({
@@ -17,7 +25,7 @@ export class EmpleadosServicio {
     });
 
     if (emailUtilizado) {
-      throw new ConflictException('El email ya está en uso');
+      throw new ConflictException('El email ya estÃ¡ en uso');
     }
 
     const sectorExistente = await this.prisma.sector.findUnique({
@@ -30,7 +38,7 @@ export class EmpleadosServicio {
 
     const hashContrasena = await bcrypt.hash(contrasena, 10);
 
-    return this.prisma.$transaction(async (tx) => {
+    const resultado = await this.prisma.$transaction(async (tx) => {
       const usuario = await tx.usuario.create({
         data: {
           email,
@@ -54,6 +62,17 @@ export class EmpleadosServicio {
 
       return { ...empleado, email: usuario.email, rol: usuario.rol };
     });
+
+    await this.auditoria.registrar({
+      usuario_id: usuarioId,
+      usuario_email: usuarioEmail,
+      accion: 'EMPLEADO_CREADO',
+      descripcion: `CreÃ³ al empleado ${nombre} ${apellido} (${email})`,
+      entidad: 'EMPLEADO',
+      entidad_id: resultado.id,
+    });
+
+    return resultado;
   }
 
   async obtenerTodos() {
@@ -109,7 +128,12 @@ export class EmpleadosServicio {
     return empleado;
   }
 
-  async actualizar(id: number, actualizarEmpleadoDto: ActualizarEmpleadoDto) {
+  async actualizar(
+    id: number,
+    actualizarEmpleadoDto: ActualizarEmpleadoDto,
+    usuarioId: number,
+    usuarioEmail: string,
+  ) {
     const empleadoExistente = await this.prisma.empleado.findUnique({
       where: { id },
     });
@@ -127,7 +151,7 @@ export class EmpleadosServicio {
       });
 
       if (emailUtilizado) {
-        throw new ConflictException('El email ya está en uso');
+        throw new ConflictException('El email ya estÃ¡ en uso');
       }
     }
 
@@ -141,40 +165,51 @@ export class EmpleadosServicio {
       }
     }
 
-  return this.prisma.$transaction(async (tx) => {
-  const { email, contrasena, esta_activo, fecha_ingreso, ...datosEmpleado } = actualizarEmpleadoDto;
+    const actualizado = await this.prisma.$transaction(async (tx) => {
+      const { email, contrasena, esta_activo, fecha_ingreso, ...datosEmpleado } = actualizarEmpleadoDto;
 
-  if (email) {
-    await tx.usuario.update({
-      where: { id: empleadoExistente.usuario_id },
-      data: { email },
+      if (email) {
+        await tx.usuario.update({
+          where: { id: empleadoExistente.usuario_id },
+          data: { email },
+        });
+      }
+
+      if (contrasena) {
+        const hashContrasena = await bcrypt.hash(contrasena, 10);
+        await tx.usuario.update({
+          where: { id: empleadoExistente.usuario_id },
+          data: { hash_contrasena: hashContrasena },
+        });
+      }
+
+      if (esta_activo !== undefined) {
+        await tx.usuario.update({
+          where: { id: empleadoExistente.usuario_id },
+          data: { esta_activo },
+        });
+      }
+
+      return tx.empleado.update({
+        where: { id },
+        data: {
+          ...datosEmpleado,
+          ...(fecha_ingreso && { fecha_ingreso: new Date(fecha_ingreso) }),
+          ...(esta_activo !== undefined && { esta_activo }),
+        },
+      });
     });
-  }
 
-  if (contrasena) {
-    const hashContrasena = await bcrypt.hash(contrasena, 10);
-    await tx.usuario.update({
-      where: { id: empleadoExistente.usuario_id },
-      data: { hash_contrasena: hashContrasena },
+    await this.auditoria.registrar({
+      usuario_id: usuarioId,
+      usuario_email: usuarioEmail,
+      accion: 'EMPLEADO_ACTUALIZADO',
+      descripcion: `EditÃ³ al empleado ${actualizado.nombre} ${actualizado.apellido}`,
+      entidad: 'EMPLEADO',
+      entidad_id: actualizado.id,
     });
-  }
 
-  if (esta_activo !== undefined) {
-    await tx.usuario.update({
-      where: { id: empleadoExistente.usuario_id },
-      data: { esta_activo },
-    });
-  }
-
-  return tx.empleado.update({
-    where: { id },
-    data: {
-      ...datosEmpleado,
-      ...(fecha_ingreso && { fecha_ingreso: new Date(fecha_ingreso) }),
-      ...(esta_activo !== undefined && { esta_activo }),
-    },
-  });
-  });
+    return actualizado;
   }
   
   async cambiarContrasenia(usuarioId:number, dto: CambiarContraseniaDto) {
@@ -188,17 +223,27 @@ export class EmpleadosServicio {
     const { contrasena_actual, contrasena_nueva } = dto;
     const passwordMatch = await bcrypt.compare(contrasena_actual, empleado.usuario.hash_contrasena);
     if (!passwordMatch) {
-      throw new UnauthorizedException('La contraseña actual es incorrecta');
+      throw new UnauthorizedException('La contraseÃ±a actual es incorrecta');
     }
     const hashContrasena = await bcrypt.hash(contrasena_nueva, 10);
     
     await this.prisma.usuario.update({
-        where: { id: empleado.usuario_id },
-        data: { hash_contrasena: hashContrasena },
+          where: { id: empleado.usuario_id },
+          data: { hash_contrasena: hashContrasena },
+        });
+
+      await this.auditoria.registrar({
+        usuario_id: empleado.usuario.id,
+        usuario_email: empleado.usuario.email,
+        accion: 'CONTRASENIA_CAMBIADA',
+        descripcion: `CambiÃ³ su contraseÃ±a`,
+        entidad: 'EMPLEADO',
+        entidad_id: empleado.id,
       });
 
-    return { mensaje: 'Contraseña actualizada correctamente' };
+    return { mensaje: 'ContraseÃ±a actualizada correctamente' };
 
   }
   
 }
+

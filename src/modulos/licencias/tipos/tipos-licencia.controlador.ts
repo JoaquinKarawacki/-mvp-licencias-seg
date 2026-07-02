@@ -5,6 +5,7 @@ import { TipoLicenciaServicio } from './tipos-licencia.servicio';
 import { JwtGuardia } from '../../../comun/guardias/jwt.guardia';
 import { RolesGuardia } from '../../../comun/guardias/roles.guardias';
 import { Roles } from '../../../comun/decoradores/roles.decorador';
+import { UsuarioActual } from '../../../comun/decoradores/usuario-actual.decorador';
 
 @Controller('tipos-licencia')
 @UseGuards(JwtGuardia, RolesGuardia)
@@ -22,23 +23,33 @@ export class TipoLicenciaControlador {
   }
 
   @Post()
-  @Roles('ADMIN')                       
+  @Roles('ADMIN')
   @UseGuards(RolesGuardia)
-  async crear(@Body() crearTipoLicenciaDto: CrearTipoLicenciaDto) {
-    return this.tipoLicenciaServicio.crear(crearTipoLicenciaDto);
+  async crear(
+    @UsuarioActual() usuario: { id: number; email: string },
+    @Body() crearTipoLicenciaDto: CrearTipoLicenciaDto,
+  ) {
+    return this.tipoLicenciaServicio.crear(crearTipoLicenciaDto, usuario.id, usuario.email);
   }
 
   @Patch(':id')
-  @Roles('ADMIN')                         // 👈 y acá
+  @Roles('ADMIN')
   @UseGuards(RolesGuardia)
-  async actualizar(@Param('id') id: string, @Body() actualizarTipoLicenciaDto: ActualizarTipoLicenciaDto) {
-    return this.tipoLicenciaServicio.actualizar(+id, actualizarTipoLicenciaDto);
+  async actualizar(
+    @Param('id') id: string,
+    @UsuarioActual() usuario: { id: number; email: string },
+    @Body() actualizarTipoLicenciaDto: ActualizarTipoLicenciaDto,
+  ) {
+    return this.tipoLicenciaServicio.actualizar(+id, actualizarTipoLicenciaDto, usuario.id, usuario.email);
   }
 
   @Delete(':id')
   @Roles('ADMIN')
   @UseGuards(RolesGuardia)
-  async eliminar(@Param('id') id: string) {
-      return this.tipoLicenciaServicio.eliminar(+id);
+  async eliminar(
+    @Param('id') id: string,
+    @UsuarioActual() usuario: { id: number; email: string },
+  ) {
+    return this.tipoLicenciaServicio.eliminar(+id, usuario.id, usuario.email);
   }
 }

@@ -5,39 +5,46 @@ import { FeriadoServicio } from './feriado.servicio';
 import { JwtGuardia } from '../../comun/guardias/jwt.guardia';
 import { RolesGuardia } from '../../comun/guardias/roles.guardias';
 import { Roles } from '../../comun/decoradores/roles.decorador';
-
+import { UsuarioActual } from '../../comun/decoradores/usuario-actual.decorador';
 
 @Controller('feriados')
 @UseGuards(JwtGuardia, RolesGuardia)
 @Roles('ADMIN')
 export class FeriadoControlador {
-    constructor(private readonly feriadoServicio: FeriadoServicio){}
+    constructor(private readonly feriadoServicio: FeriadoServicio) {}
 
     @Get()
-    async obtenerTodos(){
+    async obtenerTodos() {
         return this.feriadoServicio.obtenerTodos();
     }
 
     @Get(':id')
-    async obtenerUno(@Param('id') id: string){
+    async obtenerUno(@Param('id') id: string) {
         return this.feriadoServicio.obtenerUno(+id);
     }
 
     @Post()
-    async crear(@Body() crearFeriadoDto: CrearFeriadoDto){
-        return this.feriadoServicio.crear(crearFeriadoDto);
+    async crear(
+        @UsuarioActual() usuario: { id: number; email: string },
+        @Body() crearFeriadoDto: CrearFeriadoDto,
+    ) {
+        return this.feriadoServicio.crear(crearFeriadoDto, usuario.id, usuario.email);
     }
 
     @Patch(':id')
     async actualizar(
-    @Param('id') id: string,
-    @Body() actualizarFeriadoDto: ActualizarFeriadoDto,
+        @Param('id') id: string,
+        @UsuarioActual() usuario: { id: number; email: string },
+        @Body() actualizarFeriadoDto: ActualizarFeriadoDto,
     ) {
-        return this.feriadoServicio.actualizar(+id, actualizarFeriadoDto);
+        return this.feriadoServicio.actualizar(+id, actualizarFeriadoDto, usuario.id, usuario.email);
     }
 
     @Delete(':id')
-    async eliminar(@Param('id') id: string) {
-        return this.feriadoServicio.eliminar(+id);
+    async eliminar(
+        @Param('id') id: string,
+        @UsuarioActual() usuario: { id: number; email: string },
+    ) {
+        return this.feriadoServicio.eliminar(+id, usuario.id, usuario.email);
     }
 }
