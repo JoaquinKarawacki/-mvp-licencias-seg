@@ -137,7 +137,7 @@ Estos problemas costaron mucho tiempo. Si reaparecen, acá está la causa:
 ## MODELO DE DATOS (Prisma)
 
 - **Usuario** — email, hash_contrasena, rol (EMPLEADO|ADMIN), **esta_activo** (este es el que bloquea el login), fecha_creacion, fecha_actualizacion. Relación 1:1 con Empleado.
-- **Empleado** — usuario_id, nombre, apellido, fecha_ingreso, es_encargado, **es_estudiante** (default false), **horas_semanales** (Int, default 0; usado para calcular días de licencia de estudio), **esta_activo** (OJO: distinto al de Usuario), sector_id. Relaciones: usuario, sector, solicitudes, revisiones, saldos.
+- **Empleado** — usuario_id, nombre, apellido, fecha_ingreso, es_encargado, **es_estudiante** (default false), **horas_semanales** (Int, default 0; usado para calcular días de licencia de estudio), **esta_activo** (OJO: distinto al de Usuario), sector_id, **aprobador_id** (NUEVO, nullable, autorreferencia — ver sección "JERARQUÍA DE APROBACIÓN"). Relaciones: usuario, sector, aprobador (self), subordinados (self), solicitudes, revisiones, saldos.
 - **Sector** — nombre (único).
 - **TipoLicencia** — nombre (único), codigo (único), requiere_saldo, descripcion (opcional), esta_activo.
 - **Feriado** — fecha (única), nombre, es_recurrente.
@@ -145,6 +145,7 @@ Estos problemas costaron mucho tiempo. Si reaparecen, acá está la causa:
 - **DiaSolicitado** — solicitud_id, fecha (una fila por cada día pedido).
 - **SaldoLicencia** — empleado_id, tipo_licencia_id, anio, total_dias, dias_usados, dias_ajustados. Unicidad compuesta [empleado_id, tipo_licencia_id, anio].
 - **Notificacion** — destinatario, asunto, tipo, enviado, error, fecha_creacion.
+- **AuditLog** — usuario_id?, usuario_email, accion, descripcion, entidad?, entidad_id?, fecha_creacion. Registra cambios de estado (solicitudes, saldos, empleados). Ver sección "AUDITORÍA".
 
 ---
 
@@ -152,14 +153,28 @@ Estos problemas costaron mucho tiempo. Si reaparecen, acá está la causa:
 
 **Roles:** solo EMPLEADO y ADMIN. "Encargado" NO es rol, es atributo `es_encargado` del empleado. El encargado aprueba/rechaza solicitudes de SU sector.
 
+**🆕 JERARQUÍA DE APROBACIÓN (06/07/2026) — dueños aprueban a encargados.** Antes los encargados se autoaprobaban/cancelaban su propia licencia (bug: su propia solicitud caía en su propia bandeja de "pendientes" por matchear el filtro de sector). Ahora:
+- `Empleado.aprobador_id` (nullable, autorreferencia): si está cargado, **solo esa persona puntual** puede aprobar/rechazar las solicitudes de este empleado — reemplaza la regla de sector para ese caso.
+- Lógica centralizada en `puedeRevisar()` (`solicitud.servicio.ts`): si `solicitante.aprobador_id` existe, compara contra quien revisa; si no, sigue la regla de sector de siempre (`es_encargado && mismo sector`).
+- `verPendientes()` separa dos conjuntos y los mezcla ordenados por fecha: (a) pendientes de mi sector SIN `aprobador_id` (si soy encargado), (b) pendientes de quienes me tienen a mí como `aprobador_id` (si tengo subordinados, sea o no encargado).
+- Los 3 dueños (Garfinkel, M. Gonzalez, Fernando Schaich) tienen `es_encargado = false` — su permiso para aprobar sale pura y exclusivamente de que alguien los tenga cargados como `aprobador_id`, no de un flag nuevo. Viven en un sector nuevo llamado **"Dirección"** (creado solo porque `sector_id` es obligatorio, sin efecto en la lógica).
+- Mapeo actual: `mgonzalez@segingenieria.com` aprueba a calosso, obrusnik, baccino, rodriguez, deconto (@segingenieria.com). `garfinkel@segingenieria.com` aprueba a `gonzalez@segheliotec.com`. `schaich@segingenieria.com` aprueba a `piedracueva@segingenieria.com`.
+- Script de carga (una sola vez): `prisma/asignarAprobadores.ts` (correr con `npx tsx prisma/asignarAprobadores.ts` apuntando al `DATABASE_URL` que corresponda). Ya corrido en local; **pendiente correrlo contra Railway**. Password inicial de los 3 dueños: `Licencias2026`.
+- `GET /empleados/perfil` ahora devuelve un campo **calculado** `puede_aprobar` (`es_encargado || tiene subordinados vía aprobador_id`) para que el front sepa a quién mostrarle el link "Pendientes" (antes solo miraba `es_encargado`, lo cual excluía a los dueños). **Pendiente aplicar en el front:** cambiar el gate de `BarraNavegacion.js` de `usuario?.es_encargado` a `usuario?.puede_aprobar`, y generalizar el texto de `app/pendientes/page.js` ("Pendientes del Sector" → "Solicitudes Pendientes", ya no es siempre por sector).
+- **Falta agregar `aprobador_id` al ABM de empleados del front** (hoy solo se puede cargar por script/Prisma Studio) — decisión consciente de posponerlo, se pospuso a propósito para resolver el caso puntual de los 7 primero.
+
 **Cálculo de días (calculador):** el empleado marca días sueltos (no rango). Feriados no descuentan. **Regla del sábado:** por cada semana con 3+ días pedidos, se suma 1 día extra de descuento. 6 tests unitarios pasando.
 
 **Saldos por antigüedad:** 20 días base por año completo; proporcional si <1 año. Días extra: 0 si <5 años; desde 5 años → `1 + floor((antiguedad-5)/4)`. Antigüedad por fecha exacta al 1 de enero. Días por antigüedad se aplican al año siguiente. Se permiten saldos negativos. `dias_ajustados` para correcciones manuales de RRHH.
 - **🔴 REDONDEO/PROPORCIONAL — REGLA NUEVA DE RRHH (09/06/2026), reemplaza todo lo anterior:** lo viejo ("`Math.ceil`, total al final" y "proporcional al día") quedó DESACTUALIZADO. La regla vigente: cálculo mes a mes dividido por 30; un mes suma solo si se trabajaron ≥18 días; el empleado solo puede TOMAR la parte entera del acumulado (0,algo NO es tomable → truncar hacia abajo, NO `Math.ceil`). El código actual tiene `mesesTrabajados = 12 - getMonth()` × 1.66 y `Math.ceil` — TODO ESO hay que rehacerlo. Detalle completo, conflicto y duda abierta en la sección "PENDIENTE PRINCIPAL". Solo afecta <1 año; ≥1 año = 20 fijo no cambia.
 
+**🆕 AUDITORÍA (implementada, incluye paginación desde 06/07/2026):** tabla `AuditLog` registra SOLICITUD_CREADA/APROBADA/RECHAZADA/CANCELADA, SALDO_GENERADO/AJUSTADO, EMPLEADO_CREADO/ACTUALIZADO, CONTRASENIA_CAMBIADA. `AuditoriaServicio.registrar()` es fire-and-forget con try/catch interno (nunca rompe el flujo principal). `GET /auditoria` (solo ADMIN) ahora pagina: `?pagina=1&limite=50` (default 50, tope máximo 100), orden `fecha_creacion desc, id desc` (el id como desempate determinístico). El front (`app/admin/auditoria/page.js`) hoy llama sin parámetros → trae los 50 más recientes; falta agregarle controles de página si el volumen crece.
+
 **Licencia de estudio (NUEVA, implementada):** tipo de licencia con `codigo` `ESTUDIO`. Solo empleados con `es_estudiante = true` tienen saldo de estudio. Días según horas semanales (`calcularDiasEstudio`): ≤36h → 6 días; 37-47h → 9 días; ≥48h → 12 días. **NO depende de antigüedad** (bolsa fija). **NO aplica la regla del sábado ni descuenta distinto por feriados** (confirmado por RRHH: se descuenta igual que la común en ese aspecto). NO requiere adjuntos/comprobante en el sistema.
 
-**Notificaciones (Microsoft Graph):** al crear → mail al encargado. Al aprobar → mail al empleado + a todos@. Al rechazar → mail al empleado con motivo. Los mails nunca rompen el flujo (try/catch sin relanzar). Se registran en tabla Notificacion.
+**Notificaciones (Microsoft Graph):** al crear → mail al aprobador (encargado del sector, o el `aprobador_id` puntual si el que pide es un encargado). Al aprobar → mail al empleado + a todos@. Al rechazar → mail al empleado con motivo. Los mails nunca rompen el flujo (try/catch sin relanzar). Se registran en tabla Notificacion.
+- **🆕 NO BLOQUEANTes (06/07/2026):** las 3 llamadas a `notificaciones.*` en `solicitud.servicio.ts` (crear/aprobar/rechazar) usan `void` en vez de `await` — la respuesta HTTP ya no espera a que Microsoft Graph responda. El registro en `Notificacion` (enviado/error) sigue funcionando igual porque `enviarCorreo` maneja sus propios errores internamente.
+- **⚠️ CUIDADO AL PROBAR:** estos mails usan credenciales y direcciones REALES de la empresa (Azure Graph + `MAIL_TODOS`/`MAIL_CC_*` del `.env`), sin importar si se prueba contra la DB local o Railway — son configuraciones independientes. **Antes de aprobar/rechazar/crear solicitudes de prueba (local o Railway), siempre pisar `MAIL_TODOS`, `MAIL_CC_1`, `MAIL_CC_2` por direcciones de prueba.** Se aprendió esto de la mala manera: una sesión de verificación local mandó 2 mails reales a `todos@segingenieria.com` (avisando licencias falsas de prueba) porque el `.env` local no se había pisado. El `.env` local ahora tiene `MAIL_TODOS` y `MAIL_CC_2` temporalmente apuntando a direcciones de prueba (`segh.service@...` / `Karawacki@...`) — revertir a `todos@segingenieria.com` / `garfinkel@segingenieria.com` cuando termine el testeo general.
 
 ---
 
@@ -168,7 +183,7 @@ Estos problemas costaron mucho tiempo. Si reaparecen, acá está la causa:
 Todos con prefijo `/api`. JWT en header `Authorization: Bearer <token>`.
 
 - `POST /autenticacion/login` — body `{ email, contrasena }` → devuelve `{ token, usuario: { id, email, rol } }`. **El token está en la clave `token`** (no `access_token`).
-- `GET /empleados/perfil` — perfil del usuario logueado. Devuelve empleado con `usuario` anidado (`usuario.email`, `usuario.rol`), `es_encargado` plano, `sector.nombre`. **Fuente de verdad de quién es el usuario.**
+- `GET /empleados/perfil` — perfil del usuario logueado. Devuelve empleado con `usuario` anidado (`usuario.email`, `usuario.rol`), `es_encargado` plano, `sector.nombre`, **`puede_aprobar`** (NUEVO, calculado: `es_encargado || tiene subordinados vía aprobador_id`, usarlo en el front en vez de `es_encargado` para mostrar el link de "Pendientes"). **Fuente de verdad de quién es el usuario.**
 - `GET /empleados` (ADMIN) — lista con usuario y sector incluidos.
 - `POST /empleados` (ADMIN) — crea usuario+empleado en transacción. Body: email, contrasena, nombre, apellido, fecha_ingreso, sector_id, es_encargado?, **es_estudiante?, horas_semanales?**.
 - `PATCH /empleados/:id` (ADMIN) — actualiza. Todos los campos opcionales (PartialType).
@@ -183,6 +198,7 @@ Todos con prefijo `/api`. JWT en header `Authorization: Bearer <token>`.
 - `GET /tipos-licencia` — **abierto a cualquier logueado** (se modificó para esto). POST/PATCH solo ADMIN.
 - `GET /sectores`, `POST /sectores`, `PATCH /sectores/:id` (ADMIN).
 - `GET /feriados`, `POST /feriados`, `PATCH /feriados/:id` (ADMIN).
+- `GET /auditoria?pagina=&limite=` (ADMIN) — **NUEVO: paginado.** Default `pagina=1`, `limite=50` (tope 100). Sin params trae los 50 más recientes.
 
 ---
 
@@ -270,7 +286,7 @@ componentes/
 ## ESTADO ACTUAL
 
 ### Backend: ETAPAS 1-10 COMPLETADAS ✅
-Fundación, Autenticación (JWT), Usuarios/Empleados/Sectores, Tipos y Feriados, Calculador, Solicitudes, Saldos, Notificaciones, (Etapa 9 AuditLog pendiente), **Deploy a Railway ✅ HECHO**.
+Fundación, Autenticación (JWT), Usuarios/Empleados/Sectores, Tipos y Feriados, Calculador, Solicitudes, Saldos, Notificaciones (no bloqueantes), Auditoría (con paginación), Jerarquía de aprobación (dueños), **Deploy a Railway ✅ HECHO**.
 
 ### Frontend: PANTALLAS MÍNIMAS + ADMIN COMPLETADAS ✅
 - ✅ Login (real, con backend)
@@ -311,6 +327,14 @@ Empleado pide licencia → encargado aprueba → saldo descontado. Login funcion
 
 ## ✅ HECHO EN LAS SESIONES RECIENTES
 
+### Sesión del 06/07/2026 — Auditoría paginada, notificaciones no bloqueantes, jerarquía de aprobación
+- **Auditoría paginada.** `GET /auditoria?pagina=&limite=` (default 50, tope 100), orden `fecha_creacion desc, id desc`. Evita que la tabla `AuditLog` sin límite empiece a pesar cuando el sistema esté en uso real.
+- **Notificaciones no bloqueantes.** Las llamadas a `notificaciones.*` en `solicitud.servicio.ts` (crear/aprobar/rechazar) pasaron de `await` a `void` — la respuesta HTTP ya no espera a Microsoft Graph. El registro en `Notificacion` sigue intacto.
+- **Jerarquía de aprobación — encargados ya no se autoaprueban.** Campo nuevo `Empleado.aprobador_id` (autorreferencia nullable): si está cargado, solo esa persona aprueba/rechaza al empleado, sin importar el sector. Se agregaron 3 "dueños" (Garfinkel, M. Gonzalez, Fernando Schaich) en un sector nuevo "Dirección", cada uno aprobando a encargados puntuales. Detalle completo en la sección "JERARQUÍA DE APROBACIÓN" más arriba. Script de carga: `prisma/asignarAprobadores.ts` (corrido en local, falta correr en Railway).
+- **Campo `puede_aprobar` en `GET /empleados/perfil`.** Calculado (`es_encargado || tiene subordinados`), para que el front sepa a quién mostrarle "Pendientes" sin depender solo de `es_encargado`.
+- **Verificación real end-to-end (no solo tests):** se probó contra la DB local con usuarios reales (Calosso, Sanes, Obrusnik, mgonzalez) que: un encargado no ve su propia solicitud, su dueño sí la ve y la aprueba, un encargado de OTRO sector no puede aprobarla (403), y el flujo normal empleado→encargado sigue intacto.
+- **⚠️ Incidente durante la verificación:** al probar aprobar/rechazar localmente se mandaron 6 correos reales (incluyendo 2 a `todos@segingenieria.com`) porque el `.env` local no tenía las direcciones de prueba (el swap se había hecho solo en Railway). Lección: **siempre pisar `MAIL_TODOS`/`MAIL_CC_*` en CUALQUIER ambiente antes de ejecutar flujos que disparen notificaciones**, incluso en pruebas propias del asistente. El `.env` local quedó con `MAIL_TODOS`/`MAIL_CC_2` apuntando a direcciones de prueba — revertir junto con Railway cuando termine el testeo.
+
 ### Sesión del 11/06/2026 — Deploy a Railway
 - **Deploy completo backend + frontend en Railway.** Ambos servicios en producción y funcionando. Login verificado con credenciales reales.
 - **Configuración Railway resuelta:** builder Nixpacks (no Railpack), Node 22 via `.node-version`, `railway.json` con build y start commands.
@@ -335,7 +359,12 @@ Empleado pide licencia → encargado aprueba → saldo descontado. Login funcion
 ## LO QUE FALTA / EN CURSO
 
 ### 🔲 Pedido del usuario, pendiente de hacer
-1. **Activar/desactivar empleados.** REQUIERE CAMBIO DE BACKEND: hay DOS `esta_activo` (Usuario y Empleado). El login chequea el de **Usuario**. Para que "desactivar" bloquee el login, hay que: (a) agregar `esta_activo` opcional al `CrearEmpleadoDto` (lo hereda el Actualizar vía PartialType), y (b) en el servicio `actualizar`, sacar `esta_activo` del spread y actualizarlo en el **Usuario** (decidir si sincronizar ambos). DECISIÓN DE DISEÑO pendiente con el usuario.
+1. **Frontend — aplicar los cambios de la jerarquía de aprobación (dados como instrucciones, no confirmados como aplicados):**
+   - `componentes/BarraNavegacion.js`: cambiar `if (usuario?.es_encargado)` por `if (usuario?.puede_aprobar)` para mostrar el link de Pendientes (si no, los 3 dueños nuevos no ven el link aunque el backend ya los deja aprobar).
+   - `app/pendientes/page.js`: generalizar textos ("Pendientes del Sector" → "Solicitudes Pendientes", el mensaje de vacío también).
+2. **Correr `prisma/asignarAprobadores.ts` contra Railway** (ya corrido en local) para crear a los 3 dueños y setear los `aprobador_id` en producción.
+3. **Revertir `MAIL_TODOS`/`MAIL_CC_2` en Railway y en el `.env` local** a los valores reales (`todos@segingenieria.com` / `garfinkel@segingenieria.com`) una vez que termine el testeo con RRHH.
+4. **Activar/desactivar empleados.** REQUIERE CAMBIO DE BACKEND: hay DOS `esta_activo` (Usuario y Empleado). El login chequea el de **Usuario**. Para que "desactivar" bloquee el login, hay que: (a) agregar `esta_activo` opcional al `CrearEmpleadoDto` (lo hereda el Actualizar vía PartialType), y (b) en el servicio `actualizar`, sacar `esta_activo` del spread y actualizarlo en el **Usuario** (decidir si sincronizar ambos). DECISIÓN DE DISEÑO pendiente con el usuario.
 
 ### 🔲 BUG DEL MAIL (descubierto, no resuelto)
 El mail SÍ intenta salir (Microsoft Graph conecta), pero falla con `GraphError: The requested user 'undefined' is invalid`. **El problema es el REMITENTE, no el destinatario** — le llega `undefined` como usuario emisor. Probable variable de entorno faltante (el `.env` tiene `SMTP_FROM=` vacío). Revisar `notificaciones.servicio.ts` para ver de dónde saca el remitente. Es bug de backend, acotado. En Railway también faltaría configurar las variables de Azure (AZURE_CLIENT_ID, etc.).
@@ -357,8 +386,7 @@ async actualizar(
 }
 ```
 
-### 🔲 Del backend original (Etapa 9 + extras)
-- **Etapa 9 — Auditoría:** tabla `AuditLog`, registrar quién hizo qué (aprobaciones, ajustes, modificaciones de empleados) con valor anterior/nuevo.
+### 🔲 Del backend original (extras)
 - **Cron de saldos anuales:** `@nestjs/schedule`, que el 1 de enero genere saldos del año nuevo para empleados activos.
 - **Limpiezas menores:** typo "solictu" en mensajes de error de solicitudes; `SaldosModulo` debería exportar su servicio y `SolicitudesModulo` importarlo (hoy duplicado en providers); revertir emails de prueba en `.env`.
 - **Seed declarado en prisma.config.ts:** `prisma migrate reset` NO corre el seed automáticamente (no está bien declarado en `prisma.config.ts` para Prisma 7). Quedó pendiente dejarlo declarado para que el reset lo dispare solo, e idealmente que el seed cree un empleado estudiante de prueba + el TipoLicencia con código ESTUDIO.

@@ -16,6 +16,19 @@ export class SolicitudesServicio {
     private readonly auditoria: AuditoriaServicio,
   ) {}
 
+    // Un empleado con aprobador puntual (los encargados) solo puede ser
+    // revisado por ese aprobador. Sin aprobador puntual, rige la regla de
+    // siempre: cualquier encargado activo de su mismo sector.
+    private puedeRevisar(
+        quienRevisa: { id: number; es_encargado: boolean; sector_id: number },
+        solicitante: { sector_id: number; aprobador_id: number | null },
+    ): boolean {
+        if (solicitante.aprobador_id) {
+            return solicitante.aprobador_id === quienRevisa.id;
+        }
+        return quienRevisa.es_encargado && quienRevisa.sector_id === solicitante.sector_id;
+    }
+
     async crear(usuarioId: number, crearSolicitudLicenciaDto: CrearSolicitudLicenciaDto) {
         
         // 1. Buscar el empleado a partir del usuario del token
@@ -78,18 +91,28 @@ export class SolicitudesServicio {
             },
         });
 
-        const encargado = await this.prisma.empleado.findFirst({
-            where: {
-                sector_id: empleado.sector_id,
-                es_encargado: true,
-                esta_activo: true,
-            },
-            include: { usuario: true },
+        // Si el empleado tiene un aprobador puntual (caso de los encargados, que
+        // no pueden autoaprobarse), la notificación va para esa persona.
+        // Si no, va para el encargado del sector (regla de siempre).
+        const revisor = empleado.aprobador_id
+            ? await this.prisma.empleado.findUnique({
+                where: { id: empleado.aprobador_id },
+                include: { usuario: true },
+            })
+            : await this.prisma.empleado.findFirst({
+                where: {
+                    sector_id: empleado.sector_id,
+                    es_encargado: true,
+                    esta_activo: true,
+                    id: { not: empleado.id },
+                },
+                include: { usuario: true },
             });
 
-        if (encargado) {
-            await this.notificaciones.notificarNuevaSolicitud(
-                encargado.usuario.email,
+        if (revisor) {
+            // No se espera el envío del correo: no debe demorar la respuesta al empleado.
+            void this.notificaciones.notificarNuevaSolicitud(
+                revisor.usuario.email,
                 `${empleado.nombre} ${empleado.apellido}`,
                 diasDescontados,
             );
@@ -123,33 +146,56 @@ export class SolicitudesServicio {
     }
 
     async verPendientes(usuarioId: number) {
-        
+
         const empleado = await this.prisma.empleado.findUnique({
             where: { usuario_id: usuarioId },
         });
         if (!empleado) {
             throw new NotFoundException('El empleado no existe');
         }
-        if (!empleado.es_encargado) {
-            throw new ForbiddenException('Solo los encargados pueden ver solicitudes pendientes');
+
+        const tieneSubordinados = await this.prisma.empleado.findFirst({
+            where: { aprobador_id: empleado.id },
+        });
+
+        if (!empleado.es_encargado && !tieneSubordinados) {
+            throw new ForbiddenException('No tenés permisos para ver solicitudes pendientes');
         }
 
-        return this.prisma.solicitudLicencia.findMany({
-            where: {
-                estado: 'PENDIENTE',
-                empleado: { sector_id: empleado.sector_id },
-            },
-            include: {
-                dias: true,
-                tipo_licencia: true,
-                empleado: true,
-            },
-            orderBy: { fecha_creacion: 'asc' },
-        });
+        const incluye = { dias: true, tipo_licencia: true, empleado: true };
+
+        // Pendientes del sector: solo las de empleados que NO tienen un aprobador
+        // puntual (esas se resuelven aparte, para que un encargado no vea ni
+        // pueda tocar su propia solicitud).
+        const pendientesDeSector = empleado.es_encargado
+            ? await this.prisma.solicitudLicencia.findMany({
+                where: {
+                    estado: 'PENDIENTE',
+                    empleado: { sector_id: empleado.sector_id, aprobador_id: null },
+                },
+                include: incluye,
+            })
+            : [];
+
+        // Pendientes de quienes tienen a este empleado como aprobador puntual
+        // (caso de los encargados, que responden ante un nivel más arriba).
+        const pendientesComoAprobador = tieneSubordinados
+            ? await this.prisma.solicitudLicencia.findMany({
+                where: {
+                    estado: 'PENDIENTE',
+                    empleado: { aprobador_id: empleado.id },
+                },
+                include: incluye,
+            })
+            : [];
+
+        return [...pendientesDeSector, ...pendientesComoAprobador].sort(
+            (a, b) => a.fecha_creacion.getTime() - b.fecha_creacion.getTime(),
+        );
     }
 
     async aprobar(usuarioId: number, solicitudId: number) {
-        // 1. Buscar el encargado
+        // 1. Buscar quien revisa
         const encargado = await this.prisma.empleado.findUnique({
             where: { usuario_id: usuarioId },
             include: { usuario: true },
@@ -157,11 +203,8 @@ export class SolicitudesServicio {
         if (!encargado) {
             throw new NotFoundException('El empleado no existe');
         }
-        if (!encargado.es_encargado) {
-            throw new ForbiddenException('Solo los encargados pueden aprobar solicitudes');
-        }
 
-        // 2. Buscar la solicitud (con su empleado, para saber el sector)
+        // 2. Buscar la solicitud (con su empleado, para saber quién debe aprobarla)
         const solicitud = await this.prisma.solicitudLicencia.findUnique({
             where: { id: solicitudId },
             include: {
@@ -176,8 +219,8 @@ export class SolicitudesServicio {
         if (solicitud.estado !== 'PENDIENTE'){
             throw new ConflictException('El estado de la solicitud debe estar en pendiente para ser aprobada')
         }
-        if(solicitud.empleado.sector_id !== encargado.sector_id){
-            throw new ForbiddenException('El empleado debe pertenecer al mismo sector que el encargado')
+        if (!this.puedeRevisar(encargado, solicitud.empleado)) {
+            throw new ForbiddenException('No tenés permisos para revisar esta solicitud');
         }
 
         // determinar el año del saldo (usamos el año de la fecha de creación)
@@ -202,7 +245,8 @@ export class SolicitudesServicio {
         const desde = fechas[0].toISOString().split('T')[0];
         const hasta = fechas[fechas.length - 1].toISOString().split('T')[0];
 
-        await this.notificaciones.notificarAprobacion(
+        // No se espera el envío del correo: no debe demorar la respuesta al encargado.
+        void this.notificaciones.notificarAprobacion(
             solicitud.empleado.usuario.email,
             `${solicitud.empleado.nombre} ${solicitud.empleado.apellido}`,
             desde,
@@ -232,11 +276,7 @@ export class SolicitudesServicio {
             throw new NotFoundException('El empleado no existe');
         }
 
-        if (!encargado.es_encargado) {
-            throw new ForbiddenException('Solo los encargados pueden aprobar solicitudes');
-        }
-
-        // 2. Buscar la solicitud (con su empleado, para saber el sector)
+        // 2. Buscar la solicitud (con su empleado, para saber quién debe rechazarla)
         const solicitud = await this.prisma.solicitudLicencia.findUnique({
             where: { id: solicitudId },
             include: { empleado: { include: { usuario: true } } },
@@ -248,16 +288,17 @@ export class SolicitudesServicio {
         if (solicitud.estado !== 'PENDIENTE'){
             throw new ConflictException('El estado de la solictu debe estar en pendiente para ser aprobada')
         }
-        if(solicitud.empleado.sector_id !== encargado.sector_id){
-            throw new ForbiddenException('El empleado debe pertenecer al mismo sector que el encargado')
+        if (!this.puedeRevisar(encargado, solicitud.empleado)) {
+            throw new ForbiddenException('No tenés permisos para revisar esta solicitud');
         }
-        
+
         const rechazada = await this.prisma.solicitudLicencia.update({
             where: { id: solicitudId },
             data: { estado: 'RECHAZADA', revisado_por: encargado.id },
         });
 
-        await this.notificaciones.notificarRechazo(
+        // No se espera el envío del correo: no debe demorar la respuesta al encargado.
+        void this.notificaciones.notificarRechazo(
             solicitud.empleado.usuario.email,
             `${solicitud.empleado.nombre} ${solicitud.empleado.apellido}`,
             motivo,

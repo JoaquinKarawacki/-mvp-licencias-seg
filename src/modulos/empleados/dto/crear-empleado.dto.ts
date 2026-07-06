@@ -43,4 +43,8 @@ export class CrearEmpleadoDto {
   @IsOptional()
   @IsInt({ message: 'Las horas semanales deben ser un número' })
   horas_semanales?: number;
+
+  @IsOptional()
+  @IsInt({ message: 'El aprobador debe ser un id numérico' })
+  aprobador_id?: number;
 }

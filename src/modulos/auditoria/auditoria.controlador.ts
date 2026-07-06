@@ -1,4 +1,4 @@
-import { Controller, Get, UseGuards } from '@nestjs/common';
+import { Controller, Get, Query, UseGuards } from '@nestjs/common';
 import { AuditoriaServicio } from './auditoria.servicio';
 import { JwtGuardia } from '../../comun/guardias/jwt.guardia';
 import { RolesGuardia } from '../../comun/guardias/roles.guardias';
@@ -11,7 +11,13 @@ export class AuditoriaControlador {
   constructor(private readonly auditoriaServicio: AuditoriaServicio) {}
 
   @Get()
-  async obtenerTodos() {
-    return this.auditoriaServicio.obtenerTodos();
+  async obtenerTodos(
+    @Query('pagina') pagina?: string,
+    @Query('limite') limite?: string,
+  ) {
+    return this.auditoriaServicio.obtenerTodos(
+      pagina ? +pagina : undefined,
+      limite ? +limite : undefined,
+    );
   }
 }

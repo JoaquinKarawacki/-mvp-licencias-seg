@@ -18,7 +18,7 @@ export class EmpleadosServicio {
     usuarioId: number,
     usuarioEmail: string,
   ) {
-    const { email, contrasena, nombre, apellido, fecha_ingreso, sector_id, es_encargado, es_estudiante, horas_semanales, aplica_regla_sabado } = crearEmpleadoDto;
+    const { email, contrasena, nombre, apellido, fecha_ingreso, sector_id, es_encargado, es_estudiante, horas_semanales, aplica_regla_sabado, aprobador_id } = crearEmpleadoDto;
 
     const emailUtilizado = await this.prisma.usuario.findUnique({
       where: { email },
@@ -58,6 +58,7 @@ export class EmpleadosServicio {
           es_estudiante: es_estudiante ?? false,
           horas_semanales: horas_semanales ?? 0,
           aplica_regla_sabado: aplica_regla_sabado ?? true,
+          aprobador_id: aprobador_id ?? null,
         },
       });
 
@@ -126,7 +127,13 @@ export class EmpleadosServicio {
       throw new NotFoundException('Empleado no encontrado');
     }
 
-    return empleado;
+    // Además de los encargados de sector, un empleado puede tener gente que le
+    // reporta puntualmente (aprobador_id) sin ser "encargado" (caso de los dueños).
+    const tieneSubordinados = await this.prisma.empleado.count({
+      where: { aprobador_id: empleado.id },
+    });
+
+    return { ...empleado, puede_aprobar: empleado.es_encargado || tieneSubordinados > 0 };
   }
 
   async actualizar(
