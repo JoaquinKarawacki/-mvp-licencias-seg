@@ -65,7 +65,9 @@ async function main() {
       data: {
         email: duenio.email,
         hash_contrasena: hash,
-        rol: 'EMPLEADO',
+        // ADMIN: además de aprobar a sus encargados vía aprobador_id, los
+        // dueños tienen acceso completo al panel de administración.
+        rol: 'ADMIN',
       },
     });
 
