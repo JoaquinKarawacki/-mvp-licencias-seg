@@ -22,13 +22,13 @@ const SECTOR_DIRECCION = 'Dirección';
 
 const DUENIOS = [
   {
-    nombre: 'Marcelo',
+    nombre: 'Diego',
     apellido: 'Garfinkel',
     email: 'garfinkel@segingenieria.com',
     aprueba: ['gonzalez@segheliotec.com'],
   },
   {
-    nombre: 'M.',
+    nombre: 'Manuel',
     apellido: 'Gonzalez',
     email: 'mgonzalez@segingenieria.com',
     aprueba: [
