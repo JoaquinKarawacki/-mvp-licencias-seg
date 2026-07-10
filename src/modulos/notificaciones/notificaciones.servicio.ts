@@ -190,23 +190,22 @@ async ejecutarAvisoVispera(): Promise<void> {
 async notificarAprobacion(
   emailEmpleado: string,
   nombreEmpleado: string,
-  fechaDesde: string,
-  fechaHasta: string,
+  diasTexto: string,
 ): Promise<void> {
   // 1. Avisar al empleado
   const asuntoEmpleado = 'Tu solicitud de licencia fue aprobada';
   const cuerpoEmpleado = `
     <p>Hola ${nombreEmpleado},</p>
     <p>Tu solicitud de licencia fue <strong>aprobada</strong>.</p>
-    <p>Período: del ${fechaDesde} al ${fechaHasta}.</p>
+    <p>Días: ${diasTexto}.</p>
   `;
   await this.enviarCorreo(emailEmpleado, asuntoEmpleado, cuerpoEmpleado, 'APROBACION', this.ccFijo);
 
   // 2. Avisar a todos
-  const asuntoTodos = `Licencia aprobada - ${nombreEmpleado}`;
+  const asuntoTodos = `Aviso de licencia - ${nombreEmpleado}`;
   const cuerpoTodos = `
     <p>Se informa que <strong>${nombreEmpleado}</strong> estará de licencia
-    del ${fechaDesde} al ${fechaHasta}.</p>
+    los días ${diasTexto}.</p>
   `;
   await this.enviarCorreo(process.env.MAIL_TODOS!, asuntoTodos, cuerpoTodos, 'APROBACION_GENERAL');
 }

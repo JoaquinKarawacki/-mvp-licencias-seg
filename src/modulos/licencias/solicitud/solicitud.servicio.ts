@@ -29,6 +29,32 @@ export class SolicitudesServicio {
         return quienRevisa.es_encargado && quienRevisa.sector_id === solicitante.sector_id;
     }
 
+    // Da formato a los dias de una solicitud para mails/UI:
+    // - Consecutivos (sin saltos) y MAS de 3 -> rango: "01/07/2026 al 05/07/2026"
+    // - Con algun salto, o pocos dias -> listado: "01/07/2026, 03/07/2026 y 05/07/2026"
+    private formatearDias(dias: { fecha: Date }[]): string {
+        const unDiaMs = 24 * 60 * 60 * 1000;
+
+        const fechas = dias.map((d) => d.fecha).sort((a, b) => a.getTime() - b.getTime());
+
+        const formatear = (fecha: Date) => {
+            const [anio, mes, dia] = fecha.toISOString().split('T')[0].split('-');
+            return `${dia}/${mes}/${anio}`;
+        };
+
+        const sonConsecutivos = fechas.every(
+            (fecha, i) => i === 0 || fecha.getTime() - fechas[i - 1].getTime() === unDiaMs,
+        );
+
+        if (sonConsecutivos && fechas.length > 3) {
+            return `${formatear(fechas[0])} al ${formatear(fechas[fechas.length - 1])}`;
+        }
+
+        const textos = fechas.map(formatear);
+        if (textos.length === 1) return textos[0];
+        return `${textos.slice(0, -1).join(', ')} y ${textos[textos.length - 1]}`;
+    }
+
     async crear(usuarioId: number, crearSolicitudLicenciaDto: CrearSolicitudLicenciaDto) {
         
         // 1. Buscar el empleado a partir del usuario del token
@@ -240,17 +266,14 @@ export class SolicitudesServicio {
             
         });
 
-        // Calcular el rango de fechas (primer y último día pedido)
-        const fechas = solicitud.dias.map((d) => d.fecha).sort((a, b) => a.getTime() - b.getTime());
-        const desde = fechas[0].toISOString().split('T')[0];
-        const hasta = fechas[fechas.length - 1].toISOString().split('T')[0];
+        // Da formato a los dias pedidos (rango o listado segun corresponda)
+        const diasTexto = this.formatearDias(solicitud.dias);
 
         // No se espera el envío del correo: no debe demorar la respuesta al encargado.
         void this.notificaciones.notificarAprobacion(
             solicitud.empleado.usuario.email,
             `${solicitud.empleado.nombre} ${solicitud.empleado.apellido}`,
-            desde,
-            hasta,
+            diasTexto,
         );
 
         await this.auditoria.registrar({
