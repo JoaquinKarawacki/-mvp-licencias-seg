@@ -86,6 +86,36 @@ describe('SolicitudesServicio.formatearDias', () => {
     ).toBe('29/07/2026 al 01/08/2026');
   });
 
+  it('caso real reportado: semana completa + 3 dias sueltos de la semana siguiente -> rango + listado combinados', () => {
+    expect(
+      formatearDias([
+        fecha('2026-07-13'), // lun
+        fecha('2026-07-14'), // mar
+        fecha('2026-07-15'), // mie
+        fecha('2026-07-16'), // jue
+        fecha('2026-07-17'), // vie
+        fecha('2026-07-20'), // lun (salta el fin de semana)
+        fecha('2026-07-21'), // mar
+        fecha('2026-07-22'), // mie
+      ]),
+    ).toBe('13/07/2026 al 17/07/2026, 20/07/2026, 21/07/2026 y 22/07/2026');
+  });
+
+  it('dos tramos largos separados -> dos rangos combinados', () => {
+    expect(
+      formatearDias([
+        fecha('2026-07-06'),
+        fecha('2026-07-07'),
+        fecha('2026-07-08'),
+        fecha('2026-07-09'),
+        fecha('2026-07-20'),
+        fecha('2026-07-21'),
+        fecha('2026-07-22'),
+        fecha('2026-07-23'),
+      ]),
+    ).toBe('06/07/2026 al 09/07/2026 y 20/07/2026 al 23/07/2026');
+  });
+
   it('rango que cruza fin de anio', () => {
     expect(
       formatearDias([
