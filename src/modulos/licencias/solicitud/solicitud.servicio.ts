@@ -73,6 +73,26 @@ export class SolicitudesServicio {
         return `${segmentos.slice(0, -1).join(', ')} y ${segmentos[segmentos.length - 1]}`;
     }
 
+    // Encuentra quien debe enterarse de los movimientos de un empleado: su
+    // aprobador puntual si tiene uno cargado (encargados), o si no, el
+    // encargado activo de su sector.
+    private async buscarRevisor(empleado: { id: number; sector_id: number; aprobador_id: number | null }) {
+        return empleado.aprobador_id
+            ? this.prisma.empleado.findUnique({
+                where: { id: empleado.aprobador_id },
+                include: { usuario: true },
+            })
+            : this.prisma.empleado.findFirst({
+                where: {
+                    sector_id: empleado.sector_id,
+                    es_encargado: true,
+                    esta_activo: true,
+                    id: { not: empleado.id },
+                },
+                include: { usuario: true },
+            });
+    }
+
     async crear(usuarioId: number, crearSolicitudLicenciaDto: CrearSolicitudLicenciaDto) {
         
         // 1. Buscar el empleado a partir del usuario del token
@@ -138,20 +158,7 @@ export class SolicitudesServicio {
         // Si el empleado tiene un aprobador puntual (caso de los encargados, que
         // no pueden autoaprobarse), la notificación va para esa persona.
         // Si no, va para el encargado del sector (regla de siempre).
-        const revisor = empleado.aprobador_id
-            ? await this.prisma.empleado.findUnique({
-                where: { id: empleado.aprobador_id },
-                include: { usuario: true },
-            })
-            : await this.prisma.empleado.findFirst({
-                where: {
-                    sector_id: empleado.sector_id,
-                    es_encargado: true,
-                    esta_activo: true,
-                    id: { not: empleado.id },
-                },
-                include: { usuario: true },
-            });
+        const revisor = await this.buscarRevisor(empleado);
 
         if (revisor) {
             // No se espera el envío del correo: no debe demorar la respuesta al empleado.
@@ -370,19 +377,19 @@ export class SolicitudesServicio {
 
         const solicitud = await this.prisma.solicitudLicencia.findUnique({
             where: { id: solicitudId },
-            include: { empleado: true },
+            include: { empleado: true, dias: true },
         });
 
          if(!solicitud){
             throw new NotFoundException('La solicitud no existe')
         }
-        
+
         if (solicitud.empleado_id !== empleado.id){
             throw new ForbiddenException('No podés cancelar una solicitud que no es tuya')
         }
 
        if (solicitud.estado !== 'PENDIENTE'){
-            throw new ConflictException('El estado de la solictu debe estar en pendiente para ser aprobada')
+            throw new ConflictException('El estado de la solicitud debe estar en pendiente para ser cancelada')
         }
 
         const cancelada = await this.prisma.solicitudLicencia.update({
@@ -391,6 +398,17 @@ export class SolicitudesServicio {
                 estado: 'CANCELADA',
             },
         });
+
+        // Avisar a quien se hubiera enterado de la solicitud original, para que
+        // no quede pensando que sigue pendiente de revisar.
+        const revisor = await this.buscarRevisor(empleado);
+        if (revisor) {
+            void this.notificaciones.notificarCancelacion(
+                revisor.usuario.email,
+                `${empleado.nombre} ${empleado.apellido}`,
+                this.formatearDias(solicitud.dias),
+            );
+        }
 
         await this.auditoria.registrar({
             usuario_id: empleado.usuario.id,

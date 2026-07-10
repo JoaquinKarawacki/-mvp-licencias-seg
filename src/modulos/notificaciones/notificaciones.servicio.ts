@@ -223,4 +223,18 @@ async notificarRechazo(
   `;
   await this.enviarCorreo(emailEmpleado, asunto, cuerpo, 'RECHAZO', this.ccFijo);
   }
+
+async notificarCancelacion(
+  emailRevisor: string,
+  nombreEmpleado: string,
+  diasTexto: string,
+): Promise<void> {
+  const asunto = `Solicitud de licencia cancelada - ${nombreEmpleado}`;
+  const cuerpo = `
+    <p>Hola,</p>
+    <p><strong>${nombreEmpleado}</strong> canceló su solicitud de licencia.</p>
+    <p>Días: ${diasTexto}.</p>
+  `;
+  await this.enviarCorreo(emailRevisor, asunto, cuerpo, 'CANCELACION', this.ccFijo);
+}
 }
