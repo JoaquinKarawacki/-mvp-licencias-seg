@@ -87,13 +87,32 @@ describe('CalculadorServicio', () => {
     expect(resultado).toBe(2);
   });
 
-  it('las dos reglas se acumulan: semana1 con 3 dias (mie,jue,vie) + semana2 con 2 (lun,mar), todo un solo tramo que cruza semanas -> 5 reales + 1 (semana1 tiene 3+) + 1 (tramo cruza semanas) = 7', () => {
+  it('las dos reglas NO se acumulan cuando es el mismo sabado: semana1 con 3 dias (mie,jue,vie) + semana2 con 2 (lun,mar) -> el sabado ya lo sumo la semana1, el tramo no debe sumarlo de nuevo -> 6', () => {
     const fechas = [
-      '2026-05-06', '2026-05-07', '2026-05-08', // mié, jue, vie (semana 1: 3 días -> regla vieja suma 1)
-      '2026-05-11', '2026-05-12',                // lun, mar (semana 2: 2 días -> regla vieja no suma)
-    ]; // un solo tramo habil de 5 dias, cruza semana 1 y semana 2 -> regla nueva suma 1 mas
+      '2026-05-06', '2026-05-07', '2026-05-08', // mié, jue, vie (semana 1: 3 días -> suma 1 por su propio sábado)
+      '2026-05-11', '2026-05-12',                // lun, mar (semana 2: 2 días -> no suma)
+    ]; // el tramo cruza semana 1 y semana 2, pero el sábado entre vie y lun ya fue
+    // sumado por la semana 1 (tuvo 3+ días) -> no se debe sumar dos veces
     const resultado = servicio.calcularDias(fechas, []);
-    expect(resultado).toBe(7);
+    expect(resultado).toBe(6);
+  });
+
+  it('BUG REPORTADO: 6 al 10 (semana completa) + 13 y 14 -> 7 reales + 1 sabado (semana1) = 8, sin duplicar', () => {
+    const fechas = [
+      '2026-07-06', '2026-07-07', '2026-07-08', '2026-07-09', '2026-07-10', // lun a vie
+      '2026-07-13', '2026-07-14', // lun, mar (semana siguiente)
+    ];
+    const resultado = servicio.calcularDias(fechas, []);
+    expect(resultado).toBe(8);
+  });
+
+  it('BUG REPORTADO: 6 al 10 + 13, 14 y 15 -> 8 reales + 1 sabado (semana1) + 1 sabado (semana2, 3 dias) = 10, sin duplicar', () => {
+    const fechas = [
+      '2026-07-06', '2026-07-07', '2026-07-08', '2026-07-09', '2026-07-10', // lun a vie
+      '2026-07-13', '2026-07-14', '2026-07-15', // lun, mar, mié (semana siguiente: 3 días -> suma su propio sábado)
+    ];
+    const resultado = servicio.calcularDias(fechas, []);
+    expect(resultado).toBe(10);
   });
 
   it('orden de entrada desordenado no afecta el resultado (se ordena antes de agrupar)', () => {
