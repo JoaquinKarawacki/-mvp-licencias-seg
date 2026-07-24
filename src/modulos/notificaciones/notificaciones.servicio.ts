@@ -29,7 +29,9 @@ export class NotificacionesServicio {
     // 3. Cliente de Graph ya autenticado
     this.graphClient = Client.initWithMiddleware({ authProvider });
     this.remitente = process.env.MAIL_FROM!;
-    this.ccFijo = [process.env.MAIL_CC_1!, process.env.MAIL_CC_2!];
+    this.ccFijo = [process.env.MAIL_CC_1, process.env.MAIL_CC_2].filter(
+      (email): email is string => !!email,
+    );
   }
 
   private async calcularProximoDiaHabil(): Promise<Date> {
