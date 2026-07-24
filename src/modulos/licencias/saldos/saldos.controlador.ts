@@ -20,6 +20,14 @@ export class SaldosControlador {
     return this.saldosServicio.verMiSaldo(usuario.id, +anio);
   }
 
+  @Get('equipo')
+  async verSaldosEquipo(
+    @UsuarioActual() usuario: { id: number },
+    @Query('anio') anio: string,
+  ) {
+    return this.saldosServicio.verSaldosEquipo(usuario.id, +anio);
+  }
+
   @Get('empleado/:id')
   @Roles('ADMIN')
   @UseGuards(RolesGuardia)

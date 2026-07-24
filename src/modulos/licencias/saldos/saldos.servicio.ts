@@ -277,4 +277,59 @@ async verTodosLosSaldos(anio: number) {
   }));
 }
 
+async verSaldosEquipo(usuarioId: number, anio: number) {
+  const empleado = await this.prisma.empleado.findUnique({
+    where: { usuario_id: usuarioId },
+  });
+  if (!empleado) {
+    throw new NotFoundException('El empleado no existe');
+  }
+
+  const tieneSubordinados = await this.prisma.empleado.findFirst({
+    where: { aprobador_id: empleado.id },
+  });
+
+  const incluye = {
+    sector: true,
+    saldos: { where: { anio }, include: { tipo_licencia: true } },
+  };
+
+  // Todo el sector (a diferencia de verPendientes, acá SÍ incluye a los que
+  // tienen aprobador_id propio: esto es "quién pertenece a mi sector", no
+  // ruteo de aprobación).
+  const miembrosDeSector = empleado.es_encargado
+    ? await this.prisma.empleado.findMany({
+        where: { sector_id: empleado.sector_id, esta_activo: true },
+        include: incluye,
+      })
+    : [];
+
+  // Subordinados puntuales (caso dueño), puedan o no compartir sector.
+  const subordinados = tieneSubordinados
+    ? await this.prisma.empleado.findMany({
+        where: { aprobador_id: empleado.id, esta_activo: true },
+        include: incluye,
+      })
+    : [];
+
+  const combinados = [...miembrosDeSector];
+  for (const sub of subordinados) {
+    if (!combinados.some((e) => e.id === sub.id)) combinados.push(sub);
+  }
+  combinados.sort(
+    (a, b) => a.apellido.localeCompare(b.apellido) || a.nombre.localeCompare(b.nombre),
+  );
+
+  return combinados.map((e) => ({
+    id: e.id,
+    nombre: e.nombre,
+    apellido: e.apellido,
+    sector: e.sector,
+    saldos: e.saldos.map((s) => ({
+      ...s,
+      disponible: s.total_dias + s.dias_ajustados - s.dias_usados,
+    })),
+  }));
+}
+
 }
