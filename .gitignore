@@ -60,3 +60,6 @@ prisma.config.js
 prisma.config.js.map
 prisma.config.d.ts
 tsconfig.build.tsbuildinfo
+
+# Datos reales de empleados (PII) - nunca commitear
+prisma/datosIniciales.data.ts
