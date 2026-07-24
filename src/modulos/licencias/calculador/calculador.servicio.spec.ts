@@ -115,6 +115,19 @@ describe('CalculadorServicio', () => {
     expect(resultado).toBe(10);
   });
 
+  it('BUG REPORTADO: jueves, viernes + semana completa siguiente (tramo de 7, no de 3) -> NO suma el cruce, solo el sabado propio de la semana completa -> 8', () => {
+    const fechas = [
+      '2026-07-09', '2026-07-10', // jue, vie (semana 1: 2 días, no llega a 3)
+      '2026-07-13', '2026-07-14', '2026-07-15', '2026-07-16', '2026-07-17', // lun a vie (semana 2: 5 días -> suma su propio sábado)
+    ];
+    // tramo total: jue,vie,lun,mar,mie,jue,vie = 7 dias (no es exactamente 3)
+    // -> la regla del cruce de semana NO aplica (antes se sumaba de mas)
+    // solo aplica la regla por semana: semana2 (5 dias > 2) suma 1
+    // total = 7 dias reales + 1 = 8
+    const resultado = servicio.calcularDias(fechas, []);
+    expect(resultado).toBe(8);
+  });
+
   it('orden de entrada desordenado no afecta el resultado (se ordena antes de agrupar)', () => {
     const fechas = ['2026-05-11', '2026-05-07', '2026-05-08']; // lun, jue, vie sin ordenar
     const resultado = servicio.calcularDias(fechas, []);

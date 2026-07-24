@@ -98,13 +98,15 @@ export class CalculadorServicio {
             }
         }
 
-        // Regla nueva: un tramo de 3+ dias habiles consecutivos (el fin de
-        // semana no lo corta) que une dos semanas distintas suma 1 sabado
-        // extra, pero SOLO si ese sabado no fue ya sumado por la regla de
-        // arriba (semana por semana). El sabado que queda "entre" un
-        // viernes y el lunes siguiente pertenece a la semana del viernes:
+        // Regla nueva: un tramo de EXACTAMENTE 3 dias habiles consecutivos
+        // (el fin de semana no lo corta) que une dos semanas distintas suma
+        // 1 sabado extra, pero SOLO si ese sabado no fue ya sumado por la
+        // regla de arriba (semana por semana). El sabado que queda "entre"
+        // un viernes y el lunes siguiente pertenece a la semana del viernes:
         // si esa semana ya tuvo mas de 2 dias pedidos, su regla de arriba
-        // ya lo conto y no hay que sumarlo de nuevo.
+        // ya lo conto y no hay que sumarlo de nuevo. Si el tramo tiene MAS
+        // (o menos) de 3 dias, esta regla no aplica: cada semana se rige
+        // solo por su propia regla de arriba.
         if (aplicaReglaSabado) {
             const diasPorSemana = new Map<string, number>();
             for (const semana of semanas) {
@@ -114,7 +116,7 @@ export class CalculadorServicio {
             const unDiaMs = 24 * 60 * 60 * 1000;
             const tramos = this.agruparConsecutivosHabiles(diasValidos);
             for (const tramo of tramos) {
-                if (tramo.length < 3) continue;
+                if (tramo.length !== 3) continue;
 
                 for (let i = 1; i < tramo.length; i++) {
                     const anterior = tramo[i - 1];
