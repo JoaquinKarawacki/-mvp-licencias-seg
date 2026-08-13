@@ -245,6 +245,48 @@ export class SolicitudesServicio {
         );
     }
 
+    async verHistorialEmpleado(usuarioId: number, empleadoId: number) {
+        const quienConsulta = await this.prisma.empleado.findUnique({
+            where: { usuario_id: usuarioId },
+            include: { usuario: true },
+        });
+        if (!quienConsulta) {
+            throw new NotFoundException('El empleado no existe');
+        }
+
+        const empleadoObjetivo = await this.prisma.empleado.findUnique({
+            where: { id: empleadoId },
+            include: { sector: true },
+        });
+        if (!empleadoObjetivo) {
+            throw new NotFoundException('El empleado no existe');
+        }
+
+        const esAdmin = quienConsulta.usuario.rol === 'ADMIN';
+        if (!esAdmin && !this.puedeRevisar(quienConsulta, empleadoObjetivo)) {
+            throw new ForbiddenException('No tenés permisos para ver el historial de este empleado');
+        }
+
+        const solicitudes = await this.prisma.solicitudLicencia.findMany({
+            where: { empleado_id: empleadoId },
+            include: {
+                dias: { orderBy: { fecha: 'asc' } },
+                tipo_licencia: true,
+            },
+            orderBy: { fecha_creacion: 'desc' },
+        });
+
+        return {
+            empleado: {
+                id: empleadoObjetivo.id,
+                nombre: empleadoObjetivo.nombre,
+                apellido: empleadoObjetivo.apellido,
+                sector: empleadoObjetivo.sector?.nombre ?? null,
+            },
+            solicitudes,
+        };
+    }
+
     async aprobar(usuarioId: number, solicitudId: number) {
         // 1. Buscar quien revisa
         const encargado = await this.prisma.empleado.findUnique({

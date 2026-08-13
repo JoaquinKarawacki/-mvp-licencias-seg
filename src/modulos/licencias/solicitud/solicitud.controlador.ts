@@ -31,6 +31,14 @@ export class SolicitudesControlador {
     return this.solicitudesServicio.verPendientes(usuario.id);
   }
 
+  @Get('empleado/:id')
+  async verHistorialEmpleado(
+    @Param('id') id: string,
+    @UsuarioActual() usuario: { id: number },
+  ) {
+    return this.solicitudesServicio.verHistorialEmpleado(usuario.id, +id);
+  }
+
   @Patch(':id/aprobar')
   async aprobar(
     @Param('id') id: string,
