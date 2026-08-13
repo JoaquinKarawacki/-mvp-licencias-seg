@@ -5,6 +5,11 @@ import { TokenCredentialAuthenticationProvider } from '@microsoft/microsoft-grap
 import { PrismaServicio } from '../../prisma/prisma.servicio';
 import { Cron } from '@nestjs/schedule';
 import 'isomorphic-fetch';
+import {
+  proximoDiaHabil,
+  diaHabilAnterior,
+  seCumplioHorarioMontevideo,
+} from '../../comun/utilidades/dias-habiles.util';
 
 @Injectable()
 export class NotificacionesServicio {
@@ -35,42 +40,8 @@ export class NotificacionesServicio {
   }
 
   private async calcularProximoDiaHabil(): Promise<Date> {
-  const feriados = await this.prisma.feriado.findMany();
-
-  const candidato = new Date();
-  candidato.setUTCHours(0, 0, 0, 0);
-  candidato.setUTCDate(candidato.getUTCDate() + 1); // empezar desde mañana
-
-  while (true) {
-    const diaSemana = candidato.getUTCDay(); // 0=domingo, 6=sábado
-
-    if (diaSemana === 0 || diaSemana === 6) {
-      candidato.setUTCDate(candidato.getUTCDate() + 1);
-      continue;
-    }
-
-    const esFeriado = feriados.some((f) => {
-      if (f.es_recurrente) {
-        // feriado recurrente: solo importa mes y día, no el año
-        return (
-          f.fecha.getUTCMonth() === candidato.getUTCMonth() &&
-          f.fecha.getUTCDate() === candidato.getUTCDate()
-        );
-      }
-      // feriado fijo: fecha exacta
-      return (
-        f.fecha.toISOString().split('T')[0] ===
-        candidato.toISOString().split('T')[0]
-      );
-    });
-
-    if (esFeriado) {
-      candidato.setUTCDate(candidato.getUTCDate() + 1);
-      continue;
-    }
-
-    return candidato;
-    }
+    const feriados = await this.prisma.feriado.findMany();
+    return proximoDiaHabil(new Date(), feriados);
   }
 
   async notificarVispera(): Promise<void> {
@@ -194,7 +165,6 @@ async notificarAprobacion(
   nombreEmpleado: string,
   diasTexto: string,
 ): Promise<void> {
-  // 1. Avisar al empleado
   const asuntoEmpleado = 'Tu solicitud de licencia fue aprobada';
   const cuerpoEmpleado = `
     <p>Hola ${nombreEmpleado},</p>
@@ -202,14 +172,37 @@ async notificarAprobacion(
     <p>Días: ${diasTexto}.</p>
   `;
   await this.enviarCorreo(emailEmpleado, asuntoEmpleado, cuerpoEmpleado, 'APROBACION', this.ccFijo);
+}
 
-  // 2. Avisar a todos
-  const asuntoTodos = `Aviso de licencia - ${nombreEmpleado}`;
-  const cuerpoTodos = `
-    <p>Se informa que <strong>${nombreEmpleado}</strong> estará de licencia
-    los días ${diasTexto}.</p>
-  `;
-  await this.enviarCorreo(process.env.MAIL_TODOS!, asuntoTodos, cuerpoTodos, 'APROBACION_GENERAL');
+// El aviso a "todos" normalmente lo manda el cron de vispera
+// (ejecutarAvisoVispera), un dia habil antes de que arranque la licencia.
+// Este metodo es solo un respaldo: si al momento de aprobar ya se paso el
+// horario en que le tocaba correr al cron para esta fecha de inicio (por
+// ejemplo, se aprueba la licencia de "manana" a la tarde, o se aprueba en
+// fin de semana), el aviso general nunca llegaria por ese camino, asi que
+// se manda aca mismo.
+async avisarTodosSiCorresponde(
+  fechaInicioLicencia: Date,
+  nombreEmpleado: string,
+  diasTexto: string,
+): Promise<void> {
+  try {
+    const feriados = await this.prisma.feriado.findMany();
+    const diaHabilPrevio = diaHabilAnterior(fechaInicioLicencia, feriados);
+
+    if (!seCumplioHorarioMontevideo(diaHabilPrevio, 8)) {
+      return; // el cron de manana (o el que corresponda) todavia llega a tiempo
+    }
+
+    const asunto = `Aviso de licencia - ${nombreEmpleado}`;
+    const cuerpo = `
+      <p>Se informa que <strong>${nombreEmpleado}</strong> estará de licencia
+      los días ${diasTexto}.</p>
+    `;
+    await this.enviarCorreo(process.env.MAIL_TODOS!, asunto, cuerpo, 'APROBACION_GENERAL');
+  } catch (error) {
+    this.logger.error('Error evaluando aviso inmediato de licencia aprobada', error);
+  }
 }
 
 async notificarRechazo(

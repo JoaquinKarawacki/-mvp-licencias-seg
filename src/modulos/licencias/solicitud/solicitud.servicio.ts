@@ -260,7 +260,7 @@ export class SolicitudesServicio {
             where: { id: solicitudId },
             include: {
                 empleado: { include: { usuario: true } },
-                dias: true,
+                dias: { orderBy: { fecha: 'asc' } },
             },
         });
 
@@ -297,6 +297,15 @@ export class SolicitudesServicio {
         // No se espera el envío del correo: no debe demorar la respuesta al encargado.
         void this.notificaciones.notificarAprobacion(
             solicitud.empleado.usuario.email,
+            `${solicitud.empleado.nombre} ${solicitud.empleado.apellido}`,
+            diasTexto,
+        );
+
+        // Respaldo del aviso a todos, por si la aprobación llega demasiado
+        // tarde para que el cron de víspera llegue a tiempo (ver
+        // avisarTodosSiCorresponde). Tampoco se espera esta llamada.
+        void this.notificaciones.avisarTodosSiCorresponde(
+            solicitud.dias[0].fecha,
             `${solicitud.empleado.nombre} ${solicitud.empleado.apellido}`,
             diasTexto,
         );
