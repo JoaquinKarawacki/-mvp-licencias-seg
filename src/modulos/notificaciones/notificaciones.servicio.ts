@@ -74,6 +74,16 @@ export class NotificacionesServicio {
     return primerDia >= inicioDia && primerDia <= finDia;
   });
 
+  // el "próximo día hábil" puede estar varios días de calendario después de
+  // hoy (fin de semana o feriado de por medio), asi que no podemos asumir
+  // "mañana": hay que nombrar el día real al que corresponde el aviso.
+  const diaSemana = new Intl.DateTimeFormat('es-UY', {
+    timeZone: 'America/Montevideo',
+    weekday: 'long',
+  }).format(proximoDiaHabil);
+  const [anioObj, mesObj, diaObj] = proximoDiaHabil.toISOString().split('T')[0].split('-');
+  const fechaTexto = `${diaObj}/${mesObj}/${anioObj}`;
+
   for (const solicitud of solicitudesQueEmpiezan) {
     const nombre = `${solicitud.empleado.nombre} ${solicitud.empleado.apellido}`;
     const diasStr = solicitud.dias
@@ -83,10 +93,16 @@ export class NotificacionesServicio {
       })
       .join(', ');
 
+    // una solicitud de 1 solo día no "comienza": ese día entero es la licencia.
+    const accion =
+      solicitud.dias.length === 1
+        ? `estará de licencia el ${diaSemana} ${fechaTexto}`
+        : `comenzará su licencia el ${diaSemana} ${fechaTexto}`;
+
     await this.enviarCorreo(
       process.env.MAIL_TODOS!,
-      `Aviso de licencia mañana - ${nombre}`,
-      `<p>Se informa que <strong>${nombre}</strong> comenzará su licencia mañana.</p>
+      `Aviso de licencia - ${nombre}`,
+      `<p>Se informa que <strong>${nombre}</strong> ${accion}.</p>
        <p>Días: ${diasStr}</p>`,
       'AVISO_VISPERA',
       );
