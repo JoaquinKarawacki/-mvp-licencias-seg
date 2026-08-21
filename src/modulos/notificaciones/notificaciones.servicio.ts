@@ -201,6 +201,7 @@ async avisarTodosSiCorresponde(
   fechaInicioLicencia: Date,
   nombreEmpleado: string,
   diasTexto: string,
+  cantidadDias: number,
 ): Promise<void> {
   try {
     const feriados = await this.prisma.feriado.findMany();
@@ -210,10 +211,13 @@ async avisarTodosSiCorresponde(
       return; // el cron de manana (o el que corresponda) todavia llega a tiempo
     }
 
+    // una sola fecha es "el día", no "los días".
+    const etiquetaDias = cantidadDias === 1 ? 'el día' : 'los días';
+
     const asunto = `Aviso de licencia - ${nombreEmpleado}`;
     const cuerpo = `
       <p>Se informa que <strong>${nombreEmpleado}</strong> estará de licencia
-      los días ${diasTexto}.</p>
+      ${etiquetaDias} ${diasTexto}.</p>
     `;
     await this.enviarCorreo(process.env.MAIL_TODOS!, asunto, cuerpo, 'APROBACION_GENERAL');
   } catch (error) {

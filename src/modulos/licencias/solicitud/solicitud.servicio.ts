@@ -350,6 +350,7 @@ export class SolicitudesServicio {
             solicitud.dias[0].fecha,
             `${solicitud.empleado.nombre} ${solicitud.empleado.apellido}`,
             diasTexto,
+            solicitud.dias.length,
         );
 
         await this.auditoria.registrar({
