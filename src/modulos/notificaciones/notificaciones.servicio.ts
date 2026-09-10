@@ -78,7 +78,7 @@ export class NotificacionesServicio {
   // hoy (fin de semana o feriado de por medio), asi que no podemos asumir
   // "mañana": hay que nombrar el día real al que corresponde el aviso.
   const diaSemana = new Intl.DateTimeFormat('es-UY', {
-    timeZone: 'America/Montevideo',
+    timeZone: 'UTC',
     weekday: 'long',
   }).format(proximoDiaHabil);
   const [anioObj, mesObj, diaObj] = proximoDiaHabil.toISOString().split('T')[0].split('-');
