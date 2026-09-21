@@ -167,10 +167,11 @@ async ejecutarAvisoVispera(): Promise<void> {
 ): Promise<void> {
 
   const asunto = `Nueva solicitud de licencia - ${nombreEmpleado}`;
+  const linkPendientes = `${process.env.FRONTEND_URL}/pendientes`;
   const cuerpo = `
     <p>Hola,</p>
     <p><strong>${nombreEmpleado}</strong> solicitó una licencia de ${diasDescontados} día(s).</p>
-    <p>Ingresá al sistema para revisar y dar el OK.</p>
+    <p><a href="${linkPendientes}">Ingresá al sistema para revisar y dar el OK.</a></p>
   `;
 
   await this.enviarCorreo(emailEncargado, asunto, cuerpo, 'NUEVA_SOLICITUD', this.ccFijo);
