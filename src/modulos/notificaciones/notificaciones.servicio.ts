@@ -167,7 +167,14 @@ async ejecutarAvisoVispera(): Promise<void> {
 ): Promise<void> {
 
   const asunto = `Nueva solicitud de licencia - ${nombreEmpleado}`;
-  const linkPendientes = `${process.env.FRONTEND_URL}/pendientes`;
+  // Fallback + trim: si FRONTEND_URL falta o trae espacios/saltos de linea,
+  // el href quedaria sin esquema (undefined/pendientes) y Outlook lo trata
+  // como archivo local -> "no puede encontrar el archivo especificado".
+  const baseFront = (
+    process.env.FRONTEND_URL ||
+    'https://mvp-licecias-seg-frontend-production.up.railway.app'
+  ).trim();
+  const linkPendientes = `${baseFront}/pendientes`;
   const cuerpo = `
     <p>Hola,</p>
     <p><strong>${nombreEmpleado}</strong> solicitó una licencia de ${diasDescontados} día(s).</p>
