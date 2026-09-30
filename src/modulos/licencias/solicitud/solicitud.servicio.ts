@@ -131,11 +131,14 @@ export class SolicitudesServicio {
         // 4. Traer los feriados
         const feriados = await this.prisma.feriado.findMany();
 
-        // 5. Calcular los días a descontar
+        // 5. Calcular los días a descontar.
+        // La licencia de estudio no aplica la regla del sábado: se descuentan los días
+        // tal cual se piden (los feriados se siguen excluyendo dentro de calcularDias).
+        const esEstudio = tipoLicencia.codigo === 'ESTUDIO';
         const diasDescontados = this.calculador.calcularDias(
             crearSolicitudLicenciaDto.dias,
             feriados.map((f) => f.fecha),
-            empleado.aplica_regla_sabado,
+            esEstudio ? false : empleado.aplica_regla_sabado,
         );
 
          // 6. Crear la solicitud + sus días en una sola operación

@@ -127,3 +127,71 @@ describe('SolicitudesServicio.formatearDias', () => {
     ).toBe('29/12/2026 al 01/01/2027');
   });
 });
+
+describe('SolicitudesServicio.crear - regla del sabado por tipo de licencia', () => {
+  // Empleado con la regla del sabado ACTIVADA, para que la diferencia por tipo
+  // sea visible: en ESTUDIO se debe ignorar la regla (pasar false al calculador),
+  // en el resto de los tipos se debe respetar el flag del empleado.
+  const dias = ['2026-07-06', '2026-07-07', '2026-07-08']; // lun, mar, mie
+
+  function armarServicio(codigoTipo: string) {
+    const calcularDias = jest.fn().mockReturnValue(3);
+
+    const prisma = {
+      empleado: {
+        findUnique: jest.fn().mockResolvedValue({
+          id: 1,
+          aplica_regla_sabado: true,
+          usuario: { id: 10, email: 'empleado@test.com' },
+          nombre: 'Test',
+          apellido: 'Empleado',
+        }),
+      },
+      tipoLicencia: {
+        findUnique: jest.fn().mockResolvedValue({
+          id: 2,
+          codigo: codigoTipo,
+          nombre: codigoTipo === 'ESTUDIO' ? 'Licencia de Estudio' : 'Licencia Comun',
+        }),
+      },
+      diaSolicitado: { findFirst: jest.fn().mockResolvedValue(null) },
+      feriado: { findMany: jest.fn().mockResolvedValue([]) },
+      solicitudLicencia: {
+        create: jest.fn().mockResolvedValue({ id: 99, dias: [] }),
+      },
+    };
+
+    const servicio = new SolicitudesServicio(
+      prisma as never,
+      { calcularDias } as never,
+      {} as never, // saldos: no se usa en crear
+      { notificarNuevaSolicitud: jest.fn() } as never,
+      { registrar: jest.fn().mockResolvedValue(undefined) } as never,
+    );
+
+    // buscarRevisor consulta la DB; lo cortamos (sin revisor no se manda mail).
+    jest
+      .spyOn(servicio as unknown as { buscarRevisor: () => Promise<null> }, 'buscarRevisor')
+      .mockResolvedValue(null);
+
+    return { servicio, calcularDias };
+  }
+
+  it('ESTUDIO: ignora la regla del sabado aunque el empleado la tenga activada (pasa false)', async () => {
+    const { servicio, calcularDias } = armarServicio('ESTUDIO');
+
+    await servicio.crear(10, { tipo_licencia_id: 2, dias } as never);
+
+    expect(calcularDias).toHaveBeenCalledTimes(1);
+    expect(calcularDias.mock.calls[0][2]).toBe(false);
+  });
+
+  it('COMUN: respeta la regla del sabado del empleado (pasa true)', async () => {
+    const { servicio, calcularDias } = armarServicio('COMUN');
+
+    await servicio.crear(10, { tipo_licencia_id: 2, dias } as never);
+
+    expect(calcularDias).toHaveBeenCalledTimes(1);
+    expect(calcularDias.mock.calls[0][2]).toBe(true);
+  });
+});
